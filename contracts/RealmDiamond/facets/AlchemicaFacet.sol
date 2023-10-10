@@ -9,6 +9,7 @@ import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "../../libraries/LibAlchemica.sol";
 import "../../libraries/LibSignature.sol";
 import {IERC20Extended} from "../../interfaces/IERC20Extended.sol";
+import {IERC7432} from "../../interfaces/IERC7432.sol";
 
 uint256 constant bp = 100 ether;
 
@@ -278,15 +279,44 @@ contract AlchemicaFacet is Modifiers {
 
       //Mint new tokens if the Great Portal Balance is less than capacity
 
-      if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
+      address _gotchiOwner = diamond.ownerOf(uint32(_gotchiId));
+      address _lastGrantee = IERC7432(s.rolesRegistry).lastGrantee(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, _gotchiOwner);
+      TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
 
-        alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
-        alchemica.mint(address(this), amounts.spill);
+      if (_lastGrantee != address(0)) {
+        require(msg.sender == _lastGrantee, "AlchemicaFacet: Must be owner or borrower");
+        require(
+          IERC7432(s.rolesRegistry).hasRole(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, _gotchiOwner, _lastGrantee),
+          "AlchemicaFacet: Sender must have USER_ROLE"
+        );
+        RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(
+          keccak256("USER_ROLE"),
+          s.aavegotchiDiamond,
+          _gotchiId,
+          _gotchiOwner, // not used, but we keep it for compatibility
+          _lastGrantee
+        );
+        (uint256[] memory _rolePercentages, address[] memory _roleBeneficiaries) = abi.decode(_roleData.data, (uint256[], address[]));
+
+        for (uint256 j; j < _rolePercentages.length; j++) {
+          uint256 _roleAmount = _getAmountFromPercentage(amounts.owner, _rolePercentages[j]);
+
+          if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
+            alchemica.mint(_roleBeneficiaries[j], _roleAmount);
+            alchemica.mint(address(this), amounts.spill);
+          } else {
+            alchemica.transfer(_roleBeneficiaries[j], _roleAmount);
+          }
+        }
       } else {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
+        require(msg.sender == _gotchiOwner, "AlchemicaFacet: Must be owner or borrower");
 
-        alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
+        if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
+          alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
+          alchemica.mint(address(this), amounts.spill);
+        } else {
+          alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
+        }
       }
     }
 
@@ -303,6 +333,10 @@ contract AlchemicaFacet is Modifiers {
   /// @return last channeling timestamp
   function getLastChanneled(uint256 _gotchiId) public view returns (uint256) {
     return s.gotchiChannelings[_gotchiId];
+  }
+
+  function _getAmountFromPercentage(uint256 _amount, uint256 _percentage) internal pure returns (uint256) {
+    return (_amount * _percentage) / 100 ether;
   }
 
   /// @notice Return the last timestamp of an altar channeling
