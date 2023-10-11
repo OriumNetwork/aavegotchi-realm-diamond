@@ -277,31 +277,28 @@ contract AlchemicaFacet is Modifiers {
     for (uint256 i; i < channelAmounts.length; i++) {
       IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[i]);
 
-      //Mint new tokens if the Great Portal Balance is less than capacity
-
       address _gotchiOwner = diamond.ownerOf(uint32(_gotchiId));
-      address _lastGrantee = IERC7432(s.rolesRegistry).lastGrantee(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, _gotchiOwner);
+      address _lastGrantee = IERC7432(s.rolesRegistry).lastGrantee(keccak256("CHANNELING_ROLE"), s.aavegotchiDiamond, _gotchiId, _gotchiOwner);
       TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
 
-      if (_lastGrantee != address(0)) {
+      if (IERC7432(s.rolesRegistry).hasRole(keccak256("CHANNELING"), s.aavegotchiDiamond, _gotchiId, _gotchiOwner, _lastGrantee)) {
         require(msg.sender == _lastGrantee, "AlchemicaFacet: Must be owner or borrower");
-        require(
-          IERC7432(s.rolesRegistry).hasRole(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, _gotchiOwner, _lastGrantee),
-          "AlchemicaFacet: Sender must have USER_ROLE"
-        );
+
         RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(
-          keccak256("USER_ROLE"),
+          keccak256("CHANNELING_ROLE"),
           s.aavegotchiDiamond,
           _gotchiId,
-          _gotchiOwner, // not used, but we keep it for compatibility
+          _gotchiOwner,
           _lastGrantee
         );
+
         (uint256[] memory _rolePercentages, address[] memory _roleBeneficiaries) = abi.decode(_roleData.data, (uint256[], address[]));
 
         for (uint256 j; j < _rolePercentages.length; j++) {
           uint256 _roleAmount = _getAmountFromPercentage(amounts.owner, _rolePercentages[j]);
 
           if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
+            //Mint new tokens if the Great Portal Balance is less than capacity
             alchemica.mint(_roleBeneficiaries[j], _roleAmount);
             alchemica.mint(address(this), amounts.spill);
           } else {
@@ -312,6 +309,7 @@ contract AlchemicaFacet is Modifiers {
         require(msg.sender == _gotchiOwner, "AlchemicaFacet: Must be owner or borrower");
 
         if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
+          //Mint new tokens if the Great Portal Balance is less than capacity
           alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
           alchemica.mint(address(this), amounts.spill);
         } else {
