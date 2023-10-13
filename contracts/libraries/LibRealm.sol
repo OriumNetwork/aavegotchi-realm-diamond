@@ -216,7 +216,7 @@ library LibRealm {
       if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
         address gotchiOwner = diamond.ownerOf(_gotchiId);
         require(
-          _sender == parcelOwner || IERC7432(s.rolesRegistry).lastGrantee(keccak256("USER_ROLE", s.aavegotchiDiamond, _gotchiId, gotchiOwner, sender) == listing.borrower && gotchiOwner == parcelOwner),
+          _sender == parcelOwner || IERC7432(s.rolesRegistry).hasRole(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, gotchiOwner, sender) && gotchiOwner == parcelOwner,
           "LibRealm: Access Right - Only Owner/Borrower"
         );
       } else {
