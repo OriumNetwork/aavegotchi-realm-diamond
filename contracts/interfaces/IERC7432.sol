@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.9;
 
-import { IERC165 } from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import { IERC165 } from "../interfaces/IERC165.sol";
 
 struct RoleData {
     uint64 expirationDate;

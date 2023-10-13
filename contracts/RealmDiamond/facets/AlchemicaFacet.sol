@@ -279,39 +279,42 @@ contract AlchemicaFacet is Modifiers {
 
       TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
 
-      address _lastGrantee = IERC7432(s.rolesRegistry).lastGrantee(keccak256("CHANNELING_ROLE"), s.aavegotchiDiamond, _gotchiId, _gotchiOwner);
-      bool _isMint = alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i];
+      if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
+        if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
+          alchemica.mint(address(this), amounts.spill);
+        }
 
-      if (IERC7432(s.rolesRegistry).hasRole(keccak256("CHANNELING"), s.aavegotchiDiamond, _gotchiId, _gotchiOwner, _lastGrantee)) {
-        require(msg.sender == _lastGrantee, "AlchemicaFacet: Must be owner or borrower");
-        address _gotchiOwner = diamond.ownerOf(uint32(_gotchiId));
+        require(IERC7432(s.rolesRegistry).hasRole(
+          keccak256("USER_ROLE"),
+          s.aavegotchiDiamond,
+          _gotchiId,
+          address(0),
+          msg.sender
+        ), "AlchemicaFacet: Must have CHANNELING_ROLE");
 
+        // TODO: getting stack too deep error
         RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(
           keccak256("CHANNELING_ROLE"),
           s.aavegotchiDiamond,
           _gotchiId,
-          _gotchiOwner,
-          _lastGrantee
+          address(0),
+          msg.sender
         );
 
-        (uint256[] memory _rolePercentages, address[] memory _roleBeneficiaries) = abi.decode(_roleData.data, (uint256[], address[]));
+        (uint256[] memory percentages, address[] memory beneficiaries) = abi.decode(_roleData.data, (uint256[], address[]));
 
-        if (_isMint) {
-          alchemica.mint(address(this), amounts.spill);
-        }
+        for (uint256 j; j < percentages.length; j++) {
+          uint256 _roleAmount = getAmountFromPercentage(amounts.owner, percentages[j]);
 
-        for (uint256 j; j < _rolePercentages.length; j++) {
-          uint256 _roleAmount = _getAmountFromPercentage(amounts.owner, _rolePercentages[j]);
-
-          if (_isMint) {
+          if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
             //Mint new tokens if the Great Portal Balance is less than capacity
-            alchemica.mint(_roleBeneficiaries[j], _roleAmount);
+            alchemica.mint(beneficiaries[j], _roleAmount);
           } else {
-            alchemica.transfer(_roleBeneficiaries[j], _roleAmount);
+            alchemica.transfer(beneficiaries[j], _roleAmount);
           }
         }
       } else {
-        if (_isMint) {
+        if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
           //Mint new tokens if the Great Portal Balance is less than capacity
           alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
           alchemica.mint(address(this), amounts.spill);
@@ -336,7 +339,7 @@ contract AlchemicaFacet is Modifiers {
     return s.gotchiChannelings[_gotchiId];
   }
 
-  function _getAmountFromPercentage(uint256 _amount, uint256 _percentage) internal pure returns (uint256) {
+  function getAmountFromPercentage(uint256 _amount, uint256 _percentage) public pure returns (uint256) {
     return (_amount * _percentage) / 100 ether;
   }
 
