@@ -43,7 +43,11 @@ library LibAlchemica {
     s.parcels[_tokenId].lastUpdateTimestamp[_alchemicaType] = block.timestamp;
   }
 
-  function increaseTraits(uint256 _realmId, uint256 _installationId, bool isUpgrade) internal {
+  function increaseTraits(
+    uint256 _realmId,
+    uint256 _installationId,
+    bool isUpgrade
+  ) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     //First save the current harvested amount
@@ -109,7 +113,11 @@ library LibAlchemica {
     }
   }
 
-  function reduceTraits(uint256 _realmId, uint256 _installationId, bool isUpgrade) internal {
+  function reduceTraits(
+    uint256 _realmId,
+    uint256 _installationId,
+    bool isUpgrade
+  ) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     InstallationDiamondInterface installationsDiamond = InstallationDiamondInterface(s.installationsDiamond);
@@ -249,14 +257,15 @@ library LibAlchemica {
   }
 
   function calculateTransferAmounts(uint256 _amount, uint256 _spilloverRate) internal pure returns (uint256 owner, uint256 spill) {
-    owner = (_amount * (bp - (_spilloverRate * 10 ** 16))) / bp;
-    spill = (_amount * (_spilloverRate * 10 ** 16)) / bp;
+    owner = (_amount * (bp - (_spilloverRate * 10**16))) / bp;
+    spill = (_amount * (_spilloverRate * 10**16)) / bp;
   }
 
-  function calculateSpilloverForReservoir(
-    uint256 _realmId,
-    uint256 _alchemicaType
-  ) internal view returns (uint256 spilloverRate, uint256 spilloverRadius) {
+  function calculateSpilloverForReservoir(uint256 _realmId, uint256 _alchemicaType)
+    internal
+    view
+    returns (uint256 spilloverRate, uint256 spilloverRadius)
+  {
     AppStorage storage s = LibAppStorage.diamondStorage();
     uint256 capacityXspillrate;
     uint256 capacityXspillradius;
@@ -313,7 +322,12 @@ library LibAlchemica {
     }
   }
 
-  function mintAvailableAlchemica(uint256 _alchemicaType, uint256 _gotchiId, uint256 _ownerAmount, uint256 _spillAmount) internal {
+  function mintAvailableAlchemica(
+    uint256 _alchemicaType,
+    uint256 _gotchiId,
+    uint256 _ownerAmount,
+    uint256 _spillAmount
+  ) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
 
@@ -332,7 +346,7 @@ library LibAlchemica {
         (uint256[] memory percentages, address[] memory beneficiaries) = abi.decode(roleData.data, (uint256[], address[]));
 
         for (uint256 i; i < beneficiaries.length; i++) {
-          uint256 _amount = getAmountFromPercentage(_ownerAmount, percentages[i]);
+          uint256 _amount = LibGotchiRoles.getAmountFromPercentage(_ownerAmount, percentages[i]);
           alchemica.mint(beneficiaries[i], _amount);
         }
       } else {
@@ -340,10 +354,6 @@ library LibAlchemica {
       }
     }
     if (_spillAmount > 0) alchemica.mint(address(this), _spillAmount);
-  }
-
-  function getAmountFromPercentage(uint256 _amount, uint256 _percentage) public pure returns (uint256) {
-    return (_amount * _percentage) / 100 ether;
   }
 
   function alchemicaRecipient(uint256 _gotchiId) internal view returns (address) {
