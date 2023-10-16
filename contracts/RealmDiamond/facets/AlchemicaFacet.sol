@@ -284,24 +284,7 @@ contract AlchemicaFacet is Modifiers {
           alchemica.mint(address(this), amounts.spill);
         }
 
-        require(IERC7432(s.rolesRegistry).hasRole(
-          keccak256("CHANNELING_ROLE"),
-          s.aavegotchiDiamond,
-          _gotchiId,
-          address(0),
-          msg.sender
-        ), "AlchemicaFacet: Must have CHANNELING_ROLE");
-
-        // TODO: getting stack too deep error
-        RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(
-          keccak256("CHANNELING_ROLE"),
-          s.aavegotchiDiamond,
-          _gotchiId,
-          address(0),
-          msg.sender
-        );
-
-        (uint256[] memory percentages, address[] memory beneficiaries) = abi.decode(_roleData.data, (uint256[], address[]));
+        (uint256[] memory percentages, address[] memory beneficiaries) = getDecodedRoleData(_gotchiId);
 
         for (uint256 j; j < percentages.length; j++) {
           uint256 _roleAmount = getAmountFromPercentage(amounts.owner, percentages[j]);
@@ -330,6 +313,18 @@ contract AlchemicaFacet is Modifiers {
     s.parcelChannelings[_realmId] = block.timestamp;
 
     emit ChannelAlchemica(_realmId, _gotchiId, channelAmounts, rate, radius);
+  }
+
+  function getDecodedRoleData(uint256 _gotchiId) public view returns (uint256[] memory percentages, address[] memory beneficiaries) {
+    RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(
+      keccak256("CHANNELING_ROLE"),
+      s.aavegotchiDiamond,
+      _gotchiId,
+      address(0),
+      msg.sender
+    );
+
+    (percentages, beneficiaries) = abi.decode(_roleData.data, (uint256[], address[]));
   }
 
   /// @notice Return the last timestamp of a channeling
