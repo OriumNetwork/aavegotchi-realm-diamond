@@ -6,6 +6,8 @@ import {LibAppStorage, AppStorage, Parcel} from "./AppStorage.sol";
 import "../interfaces/IERC20Mintable.sol";
 import "../interfaces/AavegotchiDiamond.sol";
 import "../interfaces/IERC7432.sol";
+import "../libraries/LibGotchi.sol";
+
 
 library LibAlchemica {
   uint256 constant bp = 100 ether;
@@ -318,17 +320,23 @@ library LibAlchemica {
     IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[_alchemicaType]);
 
     if (_ownerAmount > 0) {
-      if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
-        address _lastGrantee = IERC7432(s.rolesRegistry).lastGrantee(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, AavegotchiDiamond(s.aavegotchiDiamond).ownerOf(_gotchiId));
-        RoleData memory roleData = IERC7432(s.rolesRegistry).roleData(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, AavegotchiDiamond(s.aavegotchiDiamond).ownerOf(_gotchiId), _lastGrantee);
-        (uint256[] memory percentages, address[] memory beneficiaries) = abi.decode(roleData.data, (uint256[],address[]));
+      address _gotchiOwner = diamond.ownerOf(_gotchiId);
+      if (IERC7432(s.rolesRegistry).hasRole(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, _gotchiOwner, msg.sender)) {
+        RoleData memory roleData = IERC7432(s.rolesRegistry).roleData(
+          keccak256("USER_ROLE"),
+          s.aavegotchiDiamond,
+          _gotchiId,
+          _gotchiOwner,
+          msg.sender
+        );
+        (uint256[] memory percentages, address[] memory beneficiaries) = abi.decode(roleData.data, (uint256[], address[]));
 
-        for(uint256 i; i < beneficiaries.length; i++) {
+        for (uint256 i; i < beneficiaries.length; i++) {
           uint256 _amount = getAmountFromPercentage(_ownerAmount, percentages[i]);
           alchemica.mint(beneficiaries[i], _amount);
         }
       } else {
-        alchemica.mint(diamond.ownerOf(_gotchiId), _ownerAmount);
+        alchemica.mint(_gotchiOwner, _ownerAmount);
       }
     }
     if (_spillAmount > 0) alchemica.mint(address(this), _spillAmount);
@@ -342,7 +350,7 @@ library LibAlchemica {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
-    if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
+    if (LibGotchi.isAavegotchiLent(uint32(_gotchiId))) {
       return diamond.gotchiEscrow(_gotchiId);
     } else {
       return diamond.ownerOf(_gotchiId);

@@ -233,7 +233,7 @@ contract AlchemicaFacet is Modifiers {
 
     //gotchi CANNOT have active listing for lending
     require(
-      !diamond.isAavegotchiListed(uint32(_gotchiId)) || diamond.isAavegotchiLent(uint32(_gotchiId)),
+      !diamond.isAavegotchiListed(uint32(_gotchiId)) || LibGotchi.isAavegotchiLent(uint32(_gotchiId)),
       "AavegotchiDiamond: Gotchi CANNOT have active listing for lending"
     );
 
@@ -279,13 +279,13 @@ contract AlchemicaFacet is Modifiers {
 
       TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
 
-      if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
+      if (LibGotchi.isAavegotchiLent(uint32(_gotchiId))) {
         if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
           alchemica.mint(address(this), amounts.spill);
         }
 
         require(IERC7432(s.rolesRegistry).hasRole(
-          keccak256("USER_ROLE"),
+          keccak256("CHANNELING_ROLE"),
           s.aavegotchiDiamond,
           _gotchiId,
           address(0),
@@ -314,12 +314,13 @@ contract AlchemicaFacet is Modifiers {
           }
         }
       } else {
+        address _gotchiOwner = diamond.ownerOf(uint32(_gotchiId));
         if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
           //Mint new tokens if the Great Portal Balance is less than capacity
-          alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
+          alchemica.mint(_gotchiOwner, amounts.owner);
           alchemica.mint(address(this), amounts.spill);
         } else {
-          alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
+          alchemica.transfer(_gotchiOwner, amounts.owner);
         }
       }
     }

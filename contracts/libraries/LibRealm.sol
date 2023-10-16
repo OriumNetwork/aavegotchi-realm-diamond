@@ -5,6 +5,7 @@ import {InstallationDiamondInterface} from "../interfaces/InstallationDiamondInt
 import {TileDiamondInterface} from "../interfaces/TileDiamond.sol";
 import "./AppStorage.sol";
 import "../libraries/BinomialRandomizer.sol";
+import "../libraries/LibGotchi.sol";
 import {IERC7432} from "../interfaces/IERC7432.sol";
 
 library LibRealm {
@@ -213,7 +214,7 @@ library LibRealm {
     }
     //Owner or borrowed gotchi
     else if (accessRight == 1) {
-      if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
+      if (LibGotchi.isAavegotchiLent(uint32(_gotchiId))) {
         address gotchiOwner = diamond.ownerOf(_gotchiId);
         require(
           _sender == parcelOwner || IERC7432(s.rolesRegistry).hasRole(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, gotchiOwner, _sender) && gotchiOwner == parcelOwner,
@@ -235,7 +236,7 @@ library LibRealm {
     }
   }
 
-  function getActionRightRole(uint256 _actionRight) public view returns(bytes32) {
+  function getActionRightRole(uint256 _actionRight) public pure returns(bytes32) {
     if(_actionRight == 0) return keccak256("CHANNELING_ROLE");
     if(_actionRight == 1) return keccak256("EMPTY_RESERVOIR_ROLE");
     if(_actionRight == 2) return keccak256("EQUIP_INSTALLATIONS_ROLE");
