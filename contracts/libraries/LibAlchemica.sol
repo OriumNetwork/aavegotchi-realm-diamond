@@ -6,7 +6,7 @@ import {LibAppStorage, AppStorage, Parcel} from "./AppStorage.sol";
 import "../interfaces/IERC20Mintable.sol";
 import "../interfaces/AavegotchiDiamond.sol";
 import "../interfaces/IERC7432.sol";
-import "../libraries/LibGotchi.sol";
+import "../libraries/LibGotchiRoles.sol";
 
 
 library LibAlchemica {
@@ -350,7 +350,7 @@ library LibAlchemica {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
-    if (LibGotchi.isAavegotchiLent(uint32(_gotchiId))) {
+    if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
       return diamond.gotchiEscrow(_gotchiId);
     } else {
       return diamond.ownerOf(_gotchiId);

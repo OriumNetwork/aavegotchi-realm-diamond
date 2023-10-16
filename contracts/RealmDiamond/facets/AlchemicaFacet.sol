@@ -233,7 +233,7 @@ contract AlchemicaFacet is Modifiers {
 
     //gotchi CANNOT have active listing for lending
     require(
-      !diamond.isAavegotchiListed(uint32(_gotchiId)) || LibGotchi.isAavegotchiLent(uint32(_gotchiId)),
+      !diamond.isAavegotchiListed(uint32(_gotchiId)) || LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId)),
       "AavegotchiDiamond: Gotchi CANNOT have active listing for lending"
     );
 
@@ -274,20 +274,22 @@ contract AlchemicaFacet is Modifiers {
       channelAmounts[i] = (channelAmounts[i] * kinshipModifier) / 100;
     }
 
+    address _gotchiOwner = diamond.ownerOf(uint32(_gotchiId));
+
     for (uint256 i; i < channelAmounts.length; i++) {
       IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[i]);
 
       TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
 
-      if (LibGotchi.isAavegotchiLent(uint32(_gotchiId))) {
+      if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
+        (uint256[] memory percentages, address[] memory beneficiaries) = getDecodedGotchiUserRoleData(_gotchiId, msg.sender);
+
         if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
           alchemica.mint(address(this), amounts.spill);
         }
 
-        (uint256[] memory percentages, address[] memory beneficiaries) = getDecodedRoleData(_gotchiId);
-
         for (uint256 j; j < percentages.length; j++) {
-          uint256 _roleAmount = getAmountFromPercentage(amounts.owner, percentages[j]);
+          uint256 _roleAmount = LibGotchiRoles.getAmountFromPercentage(amounts.owner, percentages[j]);
 
           if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
             //Mint new tokens if the Great Portal Balance is less than capacity
@@ -297,7 +299,6 @@ contract AlchemicaFacet is Modifiers {
           }
         }
       } else {
-        address _gotchiOwner = diamond.ownerOf(uint32(_gotchiId));
         if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
           //Mint new tokens if the Great Portal Balance is less than capacity
           alchemica.mint(_gotchiOwner, amounts.owner);
@@ -315,14 +316,13 @@ contract AlchemicaFacet is Modifiers {
     emit ChannelAlchemica(_realmId, _gotchiId, channelAmounts, rate, radius);
   }
 
-  function getDecodedRoleData(uint256 _gotchiId) public view returns (uint256[] memory percentages, address[] memory beneficiaries) {
-    RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(
-      keccak256("CHANNELING_ROLE"),
-      s.aavegotchiDiamond,
-      _gotchiId,
-      address(0),
-      msg.sender
-    );
+  function getDecodedGotchiUserRoleData(
+    uint256 _gotchiId,
+    address _grantee
+  ) public view returns (uint256[] memory percentages, address[] memory beneficiaries) {
+    address _grantor = AavegotchiDiamond(s.aavegotchiDiamond).ownerOf(_gotchiId);
+
+    RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, _grantor, _grantee);
 
     (percentages, beneficiaries) = abi.decode(_roleData.data, (uint256[], address[]));
   }
@@ -333,10 +333,6 @@ contract AlchemicaFacet is Modifiers {
   /// @return last channeling timestamp
   function getLastChanneled(uint256 _gotchiId) public view returns (uint256) {
     return s.gotchiChannelings[_gotchiId];
-  }
-
-  function getAmountFromPercentage(uint256 _amount, uint256 _percentage) public pure returns (uint256) {
-    return (_amount * _percentage) / 100 ether;
   }
 
   /// @notice Return the last timestamp of an altar channeling
