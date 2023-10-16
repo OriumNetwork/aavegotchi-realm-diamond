@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.9;
 
-import "../../libraries/AppStorage.sol";
+import {ProfitSplit} from "../../libraries/AppStorage.sol";
 import "./RealmFacet.sol";
 import "../../libraries/LibRealm.sol";
 import "../../libraries/LibMeta.sol";
@@ -233,7 +233,7 @@ contract AlchemicaFacet is Modifiers {
 
     //gotchi CANNOT have active listing for lending
     require(
-      !diamond.isAavegotchiListed(uint32(_gotchiId)) || LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId)),
+      !diamond.isAavegotchiListed(uint32(_gotchiId)),
       "AavegotchiDiamond: Gotchi CANNOT have active listing for lending"
     );
 
@@ -282,21 +282,41 @@ contract AlchemicaFacet is Modifiers {
       TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
 
       if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
-        (uint256[] memory percentages, address[] memory beneficiaries) = getDecodedGotchiUserRoleData(_gotchiId, msg.sender);
+
+        (ProfitSplit memory profitSplit, address thirdParty) = getDecodedGotchiUserRoleData(_gotchiId, LibMeta.msgSender());
+
+        if(profitSplit.lender > 0){
+          uint256 _lenderAmount = LibGotchiRoles.getAmountFromPercentage(amounts.owner, profitSplit.lender);
+          
+          if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
+            alchemica.mint(_gotchiOwner, _lenderAmount);
+          } else {
+            alchemica.transfer(_gotchiOwner, _lenderAmount);
+          }
+        }
+
+        if(profitSplit.borrower > 0){
+          uint256 _borrowerAmount = LibGotchiRoles.getAmountFromPercentage(amounts.owner, profitSplit.borrower);
+
+          if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
+            alchemica.mint(_gotchiOwner, _borrowerAmount);
+          } else {
+            alchemica.transfer(_gotchiOwner, _borrowerAmount);
+          }
+        }
+
+        if(profitSplit.thirdParty > 0){
+          uint256 _thirdPartyAmount = LibGotchiRoles.getAmountFromPercentage(amounts.owner, profitSplit.thirdParty);
+
+          if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
+            alchemica.mint(thirdParty, _thirdPartyAmount);
+          } else {
+            alchemica.transfer(thirdParty, _thirdPartyAmount);
+          }
+        }
 
         if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
           alchemica.mint(address(this), amounts.spill);
-        }
-
-        for (uint256 j; j < percentages.length; j++) {
-          uint256 _roleAmount = LibGotchiRoles.getAmountFromPercentage(amounts.owner, percentages[j]);
-
-          if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-            //Mint new tokens if the Great Portal Balance is less than capacity
-            alchemica.mint(beneficiaries[j], _roleAmount);
-          } else {
-            alchemica.transfer(beneficiaries[j], _roleAmount);
-          }
         }
       } else {
         if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
@@ -319,12 +339,11 @@ contract AlchemicaFacet is Modifiers {
   function getDecodedGotchiUserRoleData(
     uint256 _gotchiId,
     address _grantee
-  ) public view returns (uint256[] memory percentages, address[] memory beneficiaries) {
+  ) public view returns (ProfitSplit memory profitSplit, address thirdParty) {
     address _grantor = AavegotchiDiamond(s.aavegotchiDiamond).ownerOf(_gotchiId);
 
-    RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, _grantor, _grantee);
-
-    (percentages, beneficiaries) = abi.decode(_roleData.data, (uint256[], address[]));
+    RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(LibGotchiRoles.GOTCHIVERSE_PLAYER, s.aavegotchiDiamond, _gotchiId, _grantor, _grantee);
+    return abi.decode(_roleData.data, (ProfitSplit, address));
   }
 
   /// @notice Return the last timestamp of a channeling

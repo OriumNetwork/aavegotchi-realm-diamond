@@ -6,6 +6,7 @@ import {TileDiamondInterface} from "../interfaces/TileDiamond.sol";
 import "./AppStorage.sol";
 import "../libraries/BinomialRandomizer.sol";
 import "../libraries/LibGotchiRoles.sol";
+import "../libraries/LibRealmRoles.sol";
 import {IERC7432} from "../interfaces/IERC7432.sol";
 
 library LibRealm {
@@ -217,7 +218,9 @@ library LibRealm {
       if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
         address gotchiOwner = diamond.ownerOf(_gotchiId);
         require(
-          _sender == parcelOwner || IERC7432(s.rolesRegistry).hasRole(keccak256("USER_ROLE"), s.aavegotchiDiamond, _gotchiId, gotchiOwner, _sender) && gotchiOwner == parcelOwner,
+          _sender == parcelOwner ||
+            (IERC7432(s.rolesRegistry).hasRole(LibRealmRoles.getActionRightRole(_actionRight), s.aavegotchiDiamond, _gotchiId, gotchiOwner, _sender) &&
+              gotchiOwner == parcelOwner),
           "LibRealm: Access Right - Only Owner/Borrower"
         );
       } else {
@@ -226,7 +229,7 @@ library LibRealm {
     }
     //whitelisted addresses
     else if (accessRight == 2) {
-      require(IERC7432(s.rolesRegistry).hasNonUniqueRole(getActionRightRole(_actionRight), address(this), _realmId, parcelOwner, _sender), "LibRealm: Access Right - Only Whitelisted");
+      require(IERC7432(s.rolesRegistry).hasNonUniqueRole(LibRealmRoles.getActionRightRole(_actionRight), address(this), _realmId, parcelOwner, _sender), "LibRealm: Access Right - Only Whitelisted");
     }
     // //blacklisted addresses
     // else if (accessRight == 3) {}
@@ -234,17 +237,6 @@ library LibRealm {
     else if (accessRight == 4) {
       //do nothing! anyone can perform this action
     }
-  }
-
-  function getActionRightRole(uint256 _actionRight) public pure returns(bytes32) {
-    if(_actionRight == 0) return keccak256("CHANNELING_ROLE");
-    if(_actionRight == 1) return keccak256("EMPTY_RESERVOIR_ROLE");
-    if(_actionRight == 2) return keccak256("EQUIP_INSTALLATIONS_ROLE");
-    if(_actionRight == 3) return keccak256("EQUIP_TILES_ROLE");
-    if(_actionRight == 4) return keccak256("UNEQUIP_INSTALLATIONS_ROLE");
-    if(_actionRight == 5) return keccak256("UNEQUIP_TILES_ROLE");
-    if(_actionRight == 6) return keccak256("UPGRADE_INSTALLATIONS_ROLE");
-    revert("LibRealm: Invalid action right");
   }
 
   function installationInUpgradeQueue(
