@@ -364,13 +364,23 @@ library LibAlchemica {
   function getDecodedGotchiUserRoleData(
     uint256 _gotchiId,
     address _grantee
-  ) public view returns (ProfitSplit memory profitSplit, address thirdParty) {
+  ) public returns (ProfitSplit memory profitSplit, address thirdParty) {
     AppStorage storage s = LibAppStorage.diamondStorage();
     address _grantor = AavegotchiDiamond(s.aavegotchiDiamond).ownerOf(_gotchiId);
 
     RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(LibGotchiRoles.GOTCHIVERSE_PLAYER, s.aavegotchiDiamond, _gotchiId, _grantor, _grantee);
 
-    return abi.decode(_roleData.data, (ProfitSplit, address));
+    (bool success, ) = address(this).call(abi.encodeWithSignature("decodeData(uint256)", _roleData.data));
+
+    if(success) {
+      return decodeData(_roleData.data);
+    } else {
+      return (ProfitSplit(100 ether, 0, 0), address(0));
+    }
+  }
+
+  function decodeData(bytes memory _data) public pure returns (ProfitSplit memory, address) {
+    return abi.decode(_data, (ProfitSplit, address));
   }
 
   function alchemicaRecipient(uint256 _gotchiId) internal view returns (address) {
