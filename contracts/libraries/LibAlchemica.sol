@@ -336,23 +336,11 @@ library LibAlchemica {
 
     if (_ownerAmount > 0) {
       address _gotchiOwner = diamond.ownerOf(_gotchiId);
-      if (LibGotchiRoles.isAavegotchiPlayer(uint32(_gotchiId), LibMeta.msgSender())) {
-        
-        (ProfitSplit memory profitSplit, address thirdParty) = getDecodedGotchiUserRoleData(_gotchiId, LibMeta.msgSender());
-
-        if(profitSplit.lender > 0){
-          uint256 _lenderAmount = LibGotchiRoles.getAmountFromPercentage(_ownerAmount, profitSplit.lender);
-          alchemica.mint(_gotchiOwner, _lenderAmount);
-        }
-
-        if(profitSplit.borrower > 0){
-          uint256 _borrowerAmount = LibGotchiRoles.getAmountFromPercentage(_ownerAmount, profitSplit.borrower);
-          alchemica.mint(LibMeta.msgSender(), _borrowerAmount);
-        }
-
-        if(profitSplit.thirdParty > 0){
-          uint256 _thirdPartyAmount = LibGotchiRoles.getAmountFromPercentage(_ownerAmount, profitSplit.thirdParty);
-          alchemica.mint(thirdParty, _thirdPartyAmount);
+      if (LibGotchiRoles.hasGotchiversePlayerRole(uint32(_gotchiId), LibMeta.msgSender())) {
+        if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
+          LibGotchiRoles.transferRentalAlchemica(alchemica, _gotchiId, _ownerAmount, _gotchiOwner, true, false);
+        } else {
+          LibGotchiRoles.transferAlchemica(alchemica, _gotchiOwner, _ownerAmount, true);
         }
       } else {
         alchemica.mint(_gotchiOwner, _ownerAmount);
@@ -361,27 +349,7 @@ library LibAlchemica {
     if (_spillAmount > 0) alchemica.mint(address(this), _spillAmount);
   }
 
-  function getDecodedGotchiUserRoleData(
-    uint256 _gotchiId,
-    address _grantee
-  ) public returns (ProfitSplit memory profitSplit, address thirdParty) {
-    AppStorage storage s = LibAppStorage.diamondStorage();
-    address _grantor = AavegotchiDiamond(s.aavegotchiDiamond).ownerOf(_gotchiId);
 
-    RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(LibGotchiRoles.GOTCHIVERSE_PLAYER, s.aavegotchiDiamond, _gotchiId, _grantor, _grantee);
-
-    (bool success, ) = address(this).call(abi.encodeWithSignature("decodeData(uint256)", _roleData.data));
-
-    if(success) {
-      return decodeData(_roleData.data);
-    } else {
-      return (ProfitSplit(100 ether, 0, 0), address(0));
-    }
-  }
-
-  function decodeData(bytes memory _data) public pure returns (ProfitSplit memory, address) {
-    return abi.decode(_data, (ProfitSplit, address));
-  }
 
   function alchemicaRecipient(uint256 _gotchiId) internal view returns (address) {
     AppStorage storage s = LibAppStorage.diamondStorage();

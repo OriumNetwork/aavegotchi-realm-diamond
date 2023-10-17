@@ -231,12 +231,6 @@ contract AlchemicaFacet is Modifiers {
   function channelAlchemica(uint256 _realmId, uint256 _gotchiId, uint256 _lastChanneled, bytes memory _signature) external gameActive {
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
 
-    //gotchi CANNOT have active listing for lending
-    require(
-      !diamond.isAavegotchiListed(uint32(_gotchiId)),
-      "AavegotchiDiamond: Gotchi CANNOT have active listing for lending"
-    );
-
     //finally interact while reducing kinship
     diamond.reduceKinshipViaChanneling(uint32(_gotchiId));
 
@@ -282,51 +276,15 @@ contract AlchemicaFacet is Modifiers {
       TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
 
       if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
-
-        (ProfitSplit memory profitSplit, address thirdParty) = getDecodedGotchiUserRoleData(_gotchiId, LibMeta.msgSender());
-
-        if(profitSplit.lender > 0){
-          uint256 _lenderAmount = LibGotchiRoles.getAmountFromPercentage(amounts.owner, profitSplit.lender);
-          
-          if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-            alchemica.mint(_gotchiOwner, _lenderAmount);
-          } else {
-            alchemica.transfer(_gotchiOwner, _lenderAmount);
-          }
-        }
-
-        if(profitSplit.borrower > 0){
-          uint256 _borrowerAmount = LibGotchiRoles.getAmountFromPercentage(amounts.owner, profitSplit.borrower);
-
-          if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-            alchemica.mint(_gotchiOwner, _borrowerAmount);
-          } else {
-            alchemica.transfer(_gotchiOwner, _borrowerAmount);
-          }
-        }
-
-        if(profitSplit.thirdParty > 0){
-          uint256 _thirdPartyAmount = LibGotchiRoles.getAmountFromPercentage(amounts.owner, profitSplit.thirdParty);
-
-          if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-            alchemica.mint(thirdParty, _thirdPartyAmount);
-          } else {
-            alchemica.transfer(thirdParty, _thirdPartyAmount);
-          }
-        }
-
-        if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-          alchemica.mint(address(this), amounts.spill);
-        }
+        LibGotchiRoles.transferRentalAlchemica(alchemica, _gotchiId, amounts.owner, _gotchiOwner, alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i], true);
       } else {
-        if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-          //Mint new tokens if the Great Portal Balance is less than capacity
-          alchemica.mint(_gotchiOwner, amounts.owner);
-          alchemica.mint(address(this), amounts.spill);
-        } else {
-          alchemica.transfer(_gotchiOwner, amounts.owner);
-        }
+        LibGotchiRoles.transferAlchemica(alchemica, _gotchiOwner, amounts.owner, alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]);
       }
+
+      if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
+          alchemica.mint(address(this), amounts.spill);
+      }
+
     }
 
     //update latest channeling
@@ -334,28 +292,6 @@ contract AlchemicaFacet is Modifiers {
     s.parcelChannelings[_realmId] = block.timestamp;
 
     emit ChannelAlchemica(_realmId, _gotchiId, channelAmounts, rate, radius);
-  }
-
-  function getDecodedGotchiUserRoleData(
-    uint256 _gotchiId,
-    address _grantee
-  ) public returns (ProfitSplit memory profitSplit, address thirdParty) {
-    address _grantor = AavegotchiDiamond(s.aavegotchiDiamond).ownerOf(_gotchiId);
-
-    RoleData memory _roleData = IERC7432(s.rolesRegistry).roleData(LibGotchiRoles.GOTCHIVERSE_PLAYER, s.aavegotchiDiamond, _gotchiId, _grantor, _grantee);
-    return abi.decode(_roleData.data, (ProfitSplit, address));
-
-    (bool success, ) = address(this).call(abi.encodeWithSignature("decodeData(uint256)", _roleData.data));
-
-    if(success) {
-      return decodeData(_roleData.data);
-    } else {
-      return (ProfitSplit(100 ether, 0, 0), address(0));
-    }
-  }
-
-  function decodeData(bytes memory _data) public pure returns (ProfitSplit memory, address) {
-    return abi.decode(_data, (ProfitSplit, address));
   }
 
   /// @notice Return the last timestamp of a channeling
