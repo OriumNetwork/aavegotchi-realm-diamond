@@ -6,7 +6,7 @@ import {TileDiamondInterface} from "../interfaces/TileDiamond.sol";
 import "./AppStorage.sol";
 import "../libraries/BinomialRandomizer.sol";
 import "../libraries/LibGotchiRoles.sol";
-import "../libraries/LibRealmRoles.sol";
+import "../libraries/LibGotchiRoles.sol";
 import {IERC7432} from "../interfaces/IERC7432.sol";
 
 library LibRealm {
@@ -219,7 +219,7 @@ library LibRealm {
         address gotchiOwner = diamond.ownerOf(_gotchiId);
         require(
           _sender == parcelOwner ||
-            (IERC7432(s.rolesRegistry).hasRole(LibRealmRoles.getActionRightRole(_actionRight), s.aavegotchiDiamond, _gotchiId, gotchiOwner, _sender) &&
+            (IERC7432(s.rolesRegistry).hasRole(LibGotchiRoles.getActionRightRole(_actionRight), s.aavegotchiDiamond, _gotchiId, gotchiOwner, _sender) &&
               gotchiOwner == parcelOwner),
           "LibRealm: Access Right - Only Owner/Borrower"
         );
@@ -229,7 +229,7 @@ library LibRealm {
     }
     //whitelisted addresses
     else if (accessRight == 2) {
-      require(IERC7432(s.rolesRegistry).hasNonUniqueRole(LibRealmRoles.getActionRightRole(_actionRight), address(this), _realmId, parcelOwner, _sender), "LibRealm: Access Right - Only Whitelisted");
+      require(IERC7432(s.rolesRegistry).hasNonUniqueRole(LibGotchiRoles.getActionRightRole(_actionRight), address(this), _realmId, parcelOwner, _sender), "LibRealm: Access Right - Only Whitelisted");
     }
     // //blacklisted addresses
     // else if (accessRight == 3) {}
