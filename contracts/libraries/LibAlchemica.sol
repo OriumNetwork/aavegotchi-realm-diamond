@@ -338,7 +338,7 @@ library LibAlchemica {
       address _gotchiOwner = diamond.ownerOf(_gotchiId);
       if (LibGotchiRoles.hasGotchiversePlayerRole(uint32(_gotchiId), LibMeta.msgSender())) {
         if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
-          LibGotchiRoles.transferRentalAlchemica(alchemica, _gotchiId, _ownerAmount, _gotchiOwner, true, false);
+          LibGotchiRoles.batchTransferRentalAlchemica(alchemica, _gotchiId, _ownerAmount, _gotchiOwner, true, false);
         } else {
           LibGotchiRoles.transferAlchemica(alchemica, _gotchiOwner, _ownerAmount, true);
         }

@@ -276,7 +276,7 @@ contract AlchemicaFacet is Modifiers {
       TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
 
       if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
-        LibGotchiRoles.transferRentalAlchemica(alchemica, _gotchiId, amounts.owner, _gotchiOwner, alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i], true);
+        LibGotchiRoles.batchTransferRentalAlchemica(alchemica, _gotchiId, amounts.owner, _gotchiOwner, alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i], true);
       } else {
         LibGotchiRoles.transferAlchemica(alchemica, _gotchiOwner, amounts.owner, alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]);
       }

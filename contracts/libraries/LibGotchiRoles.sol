@@ -49,7 +49,7 @@ library LibGotchiRoles {
   function decodeData(bytes memory _data) public pure returns (bool, ProfitSplit memory, address) {
     return abi.decode(_data, (bool, ProfitSplit, address));
   }
-  function transferRentalAlchemica(IERC20Mintable _alchemica, uint256 _gotchiId, uint256 _amount, address _gotchiOwner, bool _isMint, bool _isChannelAlchemica) public {
+  function batchTransferRentalAlchemica(IERC20Mintable _alchemica, uint256 _gotchiId, uint256 _amount, address _gotchiOwner, bool _isMint, bool _isChannelAlchemica) public {
     (bool _canChannelAlchemica, ProfitSplit memory _profitSplit, address _thirdParty) = getDecodedGotchiUserRoleData(_gotchiId, LibMeta.msgSender());
     
     if(_isChannelAlchemica){
