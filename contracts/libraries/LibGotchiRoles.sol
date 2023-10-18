@@ -53,7 +53,7 @@ library LibGotchiRoles {
     );
 
     // Checking if the roleData is valid
-    (bool success, ) = address(this).call(abi.encodeWithSignature("decodeData(uint256)", _roleData.data));
+    (bool success, ) = address(this).call(abi.encodeWithSignature("decodeData(bytes)", _roleData.data));
 
     if (success) {
       return decodeData(_roleData.data);
