@@ -9,6 +9,11 @@ import {AavegotchiDiamond} from "../interfaces/AavegotchiDiamond.sol";
 
 library LibGotchiRoles {
   bytes32 public constant GOTCHIVERSE_PLAYER = keccak256("GOTCHIVERSE_PLAYER");
+  bytes32 public constant CHANNELING_ROLE = keccak256("CHANNELING_ROLE");
+  bytes32 public constant EMPTY_RESERVOIR_ROLE = keccak256("EMPTY_RESERVOIR_ROLE");
+  bytes32 public constant INSTALLATIONS_ROLE = keccak256("INSTALLATIONS_ROLE");
+  bytes32 public constant TILES_ROLE = keccak256("TILES_ROLE");
+  bytes32 public constant UPGRADE_INSTALLATIONS_ROLE = keccak256("UPGRADE_INSTALLATIONS_ROLE");
 
   struct ProfitSplit {
     uint256 lender;
@@ -101,11 +106,11 @@ library LibGotchiRoles {
   }
 
   function getActionRightRole(uint256 _actionRight) public pure returns (bytes32) {
-    if (_actionRight == 0) return keccak256("CHANNELING_ROLE");
-    if (_actionRight == 1) return keccak256("EMPTY_RESERVOIR_ROLE");
-    if (_actionRight == 2 || _actionRight == 4) return keccak256("INSTALLATIONS_ROLE");
-    if (_actionRight == 3 || _actionRight == 5) return keccak256("TILES_ROLE");
-    if (_actionRight == 6) return keccak256("UPGRADE_INSTALLATIONS_ROLE");
+    if (_actionRight == 0) return CHANNELING_ROLE;
+    if (_actionRight == 1) return EMPTY_RESERVOIR_ROLE;
+    if (_actionRight == 2 || _actionRight == 4) return INSTALLATIONS_ROLE;
+    if (_actionRight == 3 || _actionRight == 5) return TILES_ROLE;
+    if (_actionRight == 6) return UPGRADE_INSTALLATIONS_ROLE;
     revert("LibRealm: Invalid action right");
   }
 }
