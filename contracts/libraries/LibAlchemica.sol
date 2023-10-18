@@ -2,7 +2,7 @@
 pragma solidity 0.8.9;
 
 import {InstallationDiamondInterface} from "../interfaces/InstallationDiamondInterface.sol";
-import {LibAppStorage, AppStorage, Parcel, ProfitSplit} from "./AppStorage.sol";
+import {LibAppStorage, AppStorage, Parcel} from "./AppStorage.sol";
 import "../interfaces/IERC20Mintable.sol";
 import "../interfaces/AavegotchiDiamond.sol";
 import "../interfaces/IERC7432.sol";

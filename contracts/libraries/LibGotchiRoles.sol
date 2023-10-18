@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.9;
 
-import {LibAppStorage, AppStorage, ProfitSplit} from "./AppStorage.sol";
+import {LibAppStorage, AppStorage} from "./AppStorage.sol";
 import {LibMeta} from "./LibMeta.sol";
 import {IERC7432, RoleData} from "../interfaces/IERC7432.sol";
 import {IERC20Mintable} from "../interfaces/IERC20Mintable.sol";
@@ -9,6 +9,12 @@ import {AavegotchiDiamond} from "../interfaces/AavegotchiDiamond.sol";
 
 library LibGotchiRoles {
   bytes32 public constant GOTCHIVERSE_PLAYER = keccak256("GOTCHIVERSE_PLAYER");
+
+  struct ProfitSplit {
+    uint256 lender;
+    uint256 borrower;
+    uint256 thirdParty;
+  }
 
   function isAavegotchiLent(uint32 _gotchiId) internal view returns (bool) {
     AppStorage storage s = LibAppStorage.diamondStorage();

@@ -65,12 +65,6 @@ struct RequestConfig {
   bytes32 keyHash;
 }
 
-struct ProfitSplit {
-  uint256 lender;
-  uint256 borrower;
-  uint256 thirdParty;
-}
-
 struct AppStorage {
   uint256[] tokenIds;
   mapping(uint256 => Parcel) parcels;

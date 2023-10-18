@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.9;
 
-import {ProfitSplit} from "../../libraries/AppStorage.sol";
 import "./RealmFacet.sol";
 import "../../libraries/LibRealm.sol";
 import "../../libraries/LibMeta.sol";
