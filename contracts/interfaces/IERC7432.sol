@@ -82,6 +82,12 @@ interface IERC7432 is IERC165 {
     /// @param _tokenId The token identifier.
     function unlockToken(address _tokenAddress, uint256 _tokenId) external;
 
+    /// @notice Approves operator to grant and revoke roles on behalf of another user.
+    /// @param _tokenAddress The token address.
+    /// @param _operator The user approved to grant and revoke roles.
+    /// @param _approved The approval status.
+    function setRoleApprovalForAll(address _tokenAddress, address _operator, bool _approved) external;
+
     /** View Functions **/
 
     /// @notice Retrieves the owner of NFT.
