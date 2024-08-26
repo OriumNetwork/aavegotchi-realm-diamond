@@ -5,6 +5,10 @@ import {InstallationDiamondInterface} from "../interfaces/InstallationDiamondInt
 import {LibAppStorage, AppStorage, Parcel} from "./AppStorage.sol";
 import "../interfaces/IERC20Mintable.sol";
 import "../interfaces/AavegotchiDiamond.sol";
+import "../interfaces/IERC7432.sol";
+import "./LibGotchiRoles.sol";
+import "./LibMeta.sol";
+
 
 library LibAlchemica {
   uint256 constant bp = 100 ether;
@@ -326,18 +330,32 @@ library LibAlchemica {
     uint256 _spillAmount
   ) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
+    AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
 
     IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[_alchemicaType]);
 
-    if (_ownerAmount > 0) alchemica.mint(alchemicaRecipient(_gotchiId), _ownerAmount);
+    if (_ownerAmount > 0) {
+      address _gotchiOwner = diamond.ownerOf(_gotchiId);
+      if (LibGotchiRoles.hasGotchiversePlayerRole(uint32(_gotchiId), LibMeta.msgSender())) {
+        if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
+          LibGotchiRoles.batchTransferRentalAlchemica(alchemica, _gotchiId, _ownerAmount, _gotchiOwner, true, false);
+        } else {
+          LibGotchiRoles.transferAlchemica(alchemica, _gotchiOwner, _ownerAmount, true);
+        }
+      } else {
+        alchemica.mint(_gotchiOwner, _ownerAmount);
+      }
+    }
     if (_spillAmount > 0) alchemica.mint(address(this), _spillAmount);
   }
+
+
 
   function alchemicaRecipient(uint256 _gotchiId) internal view returns (address) {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
-    if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
+    if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
       return diamond.gotchiEscrow(_gotchiId);
     } else {
       return diamond.ownerOf(_gotchiId);

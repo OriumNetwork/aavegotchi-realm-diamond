@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.9;
 
-import "../../libraries/AppStorage.sol";
 import "./RealmFacet.sol";
 import "../../libraries/LibRealm.sol";
 import "../../libraries/LibMeta.sol";
@@ -9,6 +8,7 @@ import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "../../libraries/LibAlchemica.sol";
 import "../../libraries/LibSignature.sol";
 import {IERC20Extended} from "../../interfaces/IERC20Extended.sol";
+import {IERC7432} from "../../interfaces/IERC7432.sol";
 
 uint256 constant bp = 100 ether;
 
@@ -230,12 +230,6 @@ contract AlchemicaFacet is Modifiers {
   function channelAlchemica(uint256 _realmId, uint256 _gotchiId, uint256 _lastChanneled, bytes memory _signature) external gameActive {
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
 
-    //gotchi CANNOT have active listing for lending
-    require(
-      !diamond.isAavegotchiListed(uint32(_gotchiId)) || diamond.isAavegotchiLent(uint32(_gotchiId)),
-      "AavegotchiDiamond: Gotchi CANNOT have active listing for lending"
-    );
-
     //finally interact while reducing kinship
     diamond.reduceKinshipViaChanneling(uint32(_gotchiId));
 
@@ -273,21 +267,23 @@ contract AlchemicaFacet is Modifiers {
       channelAmounts[i] = (channelAmounts[i] * kinshipModifier) / 100;
     }
 
+    address _gotchiOwner = diamond.ownerOf(uint32(_gotchiId));
+
     for (uint256 i; i < channelAmounts.length; i++) {
       IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[i]);
 
-      //Mint new tokens if the Great Portal Balance is less than capacity
+      TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
+
+      if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
+        LibGotchiRoles.batchTransferRentalAlchemica(alchemica, _gotchiId, amounts.owner, _gotchiOwner, alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i], true);
+      } else {
+        LibGotchiRoles.transferAlchemica(alchemica, _gotchiOwner, amounts.owner, alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]);
+      }
 
       if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
-
-        alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
-        alchemica.mint(address(this), amounts.spill);
-      } else {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
-
-        alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
+          alchemica.mint(address(this), amounts.spill);
       }
+
     }
 
     //update latest channeling

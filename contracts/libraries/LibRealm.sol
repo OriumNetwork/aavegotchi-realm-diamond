@@ -4,7 +4,10 @@ pragma solidity 0.8.9;
 import {InstallationDiamondInterface} from "../interfaces/InstallationDiamondInterface.sol";
 import {TileDiamondInterface} from "../interfaces/TileDiamond.sol";
 import "./AppStorage.sol";
-import "./BinomialRandomizer.sol";
+import "../libraries/BinomialRandomizer.sol";
+import "../libraries/LibGotchiRoles.sol";
+import "../libraries/LibGotchiRoles.sol";
+import {IERC7432} from "../interfaces/IERC7432.sol";
 
 library LibRealm {
   event SurveyParcel(uint256 _tokenId, uint256 _round, uint256[] _alchemicas);
@@ -212,10 +215,12 @@ library LibRealm {
     }
     //Owner or borrowed gotchi
     else if (accessRight == 1) {
-      if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
-        AavegotchiDiamond.GotchiLending memory listing = diamond.getGotchiLendingFromToken(uint32(_gotchiId));
+      if (LibGotchiRoles.isAavegotchiLent(uint32(_gotchiId))) {
+        address gotchiOwner = diamond.ownerOf(_gotchiId);
         require(
-          _sender == parcelOwner || (_sender == listing.borrower && listing.lender == parcelOwner),
+          _sender == parcelOwner ||
+            (IERC7432(s.rolesRegistry).hasRole(LibGotchiRoles.getActionRightRole(_actionRight), s.aavegotchiDiamond, _gotchiId, gotchiOwner, _sender) &&
+              gotchiOwner == parcelOwner),
           "LibRealm: Access Right - Only Owner/Borrower"
         );
       } else {
@@ -224,7 +229,7 @@ library LibRealm {
     }
     //whitelisted addresses
     else if (accessRight == 2) {
-      require(diamond.isWhitelisted(s.whitelistIds[_realmId][_actionRight], _sender) > 0, "LibRealm: Access Right - Only Whitelisted");
+      require(IERC7432(s.rolesRegistry).hasNonUniqueRole(LibGotchiRoles.getActionRightRole(_actionRight), address(this), _realmId, parcelOwner, _sender), "LibRealm: Access Right - Only Whitelisted");
     }
     // //blacklisted addresses
     // else if (accessRight == 3) {}
