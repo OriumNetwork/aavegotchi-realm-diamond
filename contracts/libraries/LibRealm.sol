@@ -231,9 +231,9 @@ library LibRealm {
     else if (accessRight == 4) {
         // do nothing! anyone can perform this action
     } else {
-        // If access rights don't allow, check if the user has the appropriate role in ParcelRolesRegistryFacet
+
         ParcelRolesRegistryFacet rolesRegistry = ParcelRolesRegistryFacet(s.parcelRolesRegistryFacet);
-        bytes32 roleId = getRoleForActionRight(_actionRight);  // Implement this function to map _actionRight to roleId
+        bytes32 roleId = getRoleForActionRight(_actionRight);  
         bool hasRole = rolesRegistry.recipientOf(address(this), _realmId, roleId) == _sender;
 
         require(hasRole, "LibRealm: Access Right - No Permission or Role");
