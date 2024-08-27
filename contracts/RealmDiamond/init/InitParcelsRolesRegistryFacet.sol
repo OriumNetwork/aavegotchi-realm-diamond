@@ -28,5 +28,6 @@ contract InitParcelsRolesRegistryFacet {
             s.allowedRoles.push(initialRoles[i]);
         }
 
+         s.parcelRolesRegistryFacet = address(this);
     }
 }

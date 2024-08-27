@@ -29,10 +29,10 @@ describe("ParcelRolesRegistryFacet", async () => {
 
   before(async () => {
     // Reset hardhat network
-    await network.provider.request({
-      method: "hardhat_reset",
-      params: [{ forking: { jsonRpcUrl: process.env.MATIC_URL } }],
-    });
+    // await network.provider.request({
+    //   method: "hardhat_reset",
+    //   params: [{ forking: { jsonRpcUrl: process.env.MATIC_URL } }],
+    // });
 
     const signers = await ethers.getSigners();
     grantor = signers[0];
@@ -40,6 +40,8 @@ describe("ParcelRolesRegistryFacet", async () => {
     anotherUser = signers[2];
 
    await deployParcelsRolesRegistryFacet();
+
+   console.log("passou aqui hein")
 
      // Deploy the mock ERC721 contract
      const MockERC721 = await ethers.getContractFactory("MockERC721");
@@ -54,7 +56,7 @@ describe("ParcelRolesRegistryFacet", async () => {
   realmDiamondAddress
 );
 
-    await parcelRolesRegistryFacet.setRoleApprovalForAllFacet(mockERC721.address, grantor.address, true);
+    await parcelRolesRegistryFacet.setRoleApprovalForAll(mockERC721.address, grantor.address, true);
 
   });
 

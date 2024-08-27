@@ -3,6 +3,7 @@ pragma solidity 0.8.9;
 
 import {InstallationDiamondInterface} from "../interfaces/InstallationDiamondInterface.sol";
 import {TileDiamondInterface} from "../interfaces/TileDiamond.sol";
+import {ParcelRolesRegistryFacet} from "../RealmDiamond/facets/ParcelRolesRegistryFacet.sol";
 import "./AppStorage.sol";
 import "./BinomialRandomizer.sol";
 
@@ -199,40 +200,52 @@ library LibRealm {
     uint256 _gotchiId,
     uint256 _actionRight,
     address _sender
-  ) internal view {
+) internal view {
     AppStorage storage s = LibAppStorage.diamondStorage();
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
 
     uint256 accessRight = s.accessRights[_realmId][_actionRight];
-    address parcelOwner = s.parcels[_realmId].owner;
+    address parcelOwner = s.parcels[_realmId].owner; 
 
-    //Only owner
+    // Only owner
     if (accessRight == 0) {
-      require(_sender == parcelOwner, "LibRealm: Access Right - Only Owner");
-    }
-    //Owner or borrowed gotchi
-    else if (accessRight == 1) {
-      if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
-        AavegotchiDiamond.GotchiLending memory listing = diamond.getGotchiLendingFromToken(uint32(_gotchiId));
-        require(
-          _sender == parcelOwner || (_sender == listing.borrower && listing.lender == parcelOwner),
-          "LibRealm: Access Right - Only Owner/Borrower"
-        );
-      } else {
         require(_sender == parcelOwner, "LibRealm: Access Right - Only Owner");
-      }
     }
-    //whitelisted addresses
+    // Owner or borrowed gotchi
+    else if (accessRight == 1) {
+        if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
+            AavegotchiDiamond.GotchiLending memory listing = diamond.getGotchiLendingFromToken(uint32(_gotchiId));
+            require(
+                _sender == parcelOwner || (_sender == listing.borrower && listing.lender == parcelOwner),
+                "LibRealm: Access Right - Only Owner/Borrower"
+            );
+        } else {
+            require(_sender == parcelOwner, "LibRealm: Access Right - Only Owner");
+        }
+    }
+    // Whitelisted addresses
     else if (accessRight == 2) {
-      require(diamond.isWhitelisted(s.whitelistIds[_realmId][_actionRight], _sender) > 0, "LibRealm: Access Right - Only Whitelisted");
+        require(diamond.isWhitelisted(s.whitelistIds[_realmId][_actionRight], _sender) > 0, "LibRealm: Access Right - Only Whitelisted");
     }
-    // //blacklisted addresses
-    // else if (accessRight == 3) {}
-    //anyone
+    // Anyone
     else if (accessRight == 4) {
-      //do nothing! anyone can perform this action
+        // do nothing! anyone can perform this action
+    } else {
+        // If access rights don't allow, check if the user has the appropriate role in ParcelRolesRegistryFacet
+        ParcelRolesRegistryFacet rolesRegistry = ParcelRolesRegistryFacet(s.parcelRolesRegistryFacet);
+        bytes32 roleId = getRoleForActionRight(_actionRight);  // Implement this function to map _actionRight to roleId
+        bool hasRole = rolesRegistry.recipientOf(address(this), _realmId, roleId) == _sender;
+
+        require(hasRole, "LibRealm: Access Right - No Permission or Role");
     }
-  }
+}
+
+function getRoleForActionRight(uint256 _actionRight) internal pure returns (bytes32) {
+    if (_actionRight == 2) return keccak256("AlchemicaChanneling()");
+    // Add other mappings as necessary
+    return bytes32(0);
+}
+
 
   function installationInUpgradeQueue(
     uint256 _realmId,

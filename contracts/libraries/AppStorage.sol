@@ -46,6 +46,7 @@ struct Parcel {
   uint256[64][64] startPositionBuildGrid;
   uint256[64][64] startPositionTileGrid;
   uint16 harvesterCount;
+
 }
 
 struct BounceGate {
@@ -130,6 +131,7 @@ struct AppStorage {
 
   mapping(bytes32 => bool) validRoles;
   bytes32[] allowedRoles;
+  address parcelRolesRegistryFacet;
 }
 
 library LibAppStorage {

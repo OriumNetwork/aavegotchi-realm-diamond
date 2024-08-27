@@ -5,10 +5,12 @@ import {
   convertFacetAndSelectorsToString,
 } from "../../../tasks/deployUpgrade";
 import { varsForNetwork } from "../../../constants";
+import { maticRealmDiamondAddress } from "../../../scripts/tile/helperFunctions";
 import { InitParcelsRolesRegistryFacet__factory } from "../../../typechain-types";
 import { InitParcelsRolesRegistryFacetInterface } from "../../../typechain-types/contracts/RealmDiamond/init/InitParcelsRolesRegistryFacet";
 import { ethers, run } from "hardhat";
 
+const owner = "0x1D0360BaC7299C86Ec8E99d0c1C9A95FEfaF2a11";
 
 
 
@@ -17,7 +19,7 @@ export async function deployParcelsRolesRegistryFacet() {
   const facets: FacetsAndAddSelectors[] = [
     {
       facetName:
-        "contracts/Aavegotchi/facets/ParcelRolesRegistryFacet.sol:ParcelRolesRegistryFacet",
+        "contracts/RealmDiamond/facets/ParcelRolesRegistryFacet.sol:ParcelRolesRegistryFacet",
       addSelectors: [
         "function grantRole((bytes32,address,uint256,address,uint64,bool,bytes) calldata _role) external",
         "function revokeRole(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) external",
@@ -36,7 +38,7 @@ export async function deployParcelsRolesRegistryFacet() {
 
     {
       facetName:
-        "contracts/Aavegotchi/init/InitParcelsRolesRegistryFacet.sol:InitParcelsRolesRegistryFacet",
+        "contracts/RealmDiamond/init/InitParcelsRolesRegistryFacet.sol:InitParcelsRolesRegistryFacet",
       addSelectors: ["function init() external"],
       removeSelectors: [],
     },
@@ -51,18 +53,19 @@ export async function deployParcelsRolesRegistryFacet() {
   //@ts-ignore
   const joined = convertFacetAndSelectorsToString(facets);
   const args: DeployUpgradeTaskArgs = {
+
     diamondAddress: vars.realmDiamond,
     facetsAndAddSelectors: joined,
     useLedger: false,
     useMultisig: false,
     initCalldata: payload,
-    initAddress: ethers.constants.AddressZero,
+    initAddress: vars.realmDiamond,
+  
   };
 
-
   await run("deployUpgrade", args);
-
-  await removeInitParcelsItemsRolesRegistryFacet();
+  
+ // await removeInitParcelsItemsRolesRegistryFacet();
 }
 
 async function removeInitParcelsItemsRolesRegistryFacet() {
