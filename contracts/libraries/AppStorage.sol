@@ -131,7 +131,6 @@ struct AppStorage {
 
   mapping(bytes32 => bool) validRoles;
   bytes32[] allowedRoles;
-  address parcelRolesRegistryFacet;
 }
 
 library LibAppStorage {

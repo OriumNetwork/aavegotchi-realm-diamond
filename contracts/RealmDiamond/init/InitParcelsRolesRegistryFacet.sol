@@ -27,7 +27,5 @@ contract InitParcelsRolesRegistryFacet {
             s.validRoles[initialRoles[i]] = true;
             s.allowedRoles.push(initialRoles[i]);
         }
-
-         s.parcelRolesRegistryFacet = address(this);
     }
 }
