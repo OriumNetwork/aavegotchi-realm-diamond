@@ -5,9 +5,10 @@ import {LibDiamond} from "../../libraries/LibDiamond.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IERC7432} from "../../interfaces/IERC7432.sol";
 import {LibAppStorage, AppStorage} from "../../libraries/AppStorage.sol";
+import {InstallationAppStorage} from "../../libraries/AppStorageInstallation.sol";
 
 contract InitParcelsRolesRegistryFacet {
-     AppStorage internal s;
+     InstallationAppStorage internal s;
      
     function init() public {
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
@@ -25,7 +26,6 @@ contract InitParcelsRolesRegistryFacet {
 
         for (uint256 i = 0; i < initialRoles.length; i++) {
             s.validRoles[initialRoles[i]] = true;
-            s.allowedRoles.push(initialRoles[i]);
         }
     }
 }
