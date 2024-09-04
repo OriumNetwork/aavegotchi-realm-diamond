@@ -46,7 +46,6 @@ struct Parcel {
   uint256[64][64] startPositionBuildGrid;
   uint256[64][64] startPositionTileGrid;
   uint16 harvesterCount;
-
 }
 
 struct BounceGate {
