@@ -14,9 +14,12 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   uint256 public constant MAX_EXPIRATION_DATE = 90 days;
   uint256 constant MAX_SHARES_LENGTH = 100;
 
+    event _REALM(address realm);
+
   /** Modifiers **/
 
     modifier onlyRealm(address _tokenAddress) {
+        emit _REALM(s.realmDiamond);
         require(_tokenAddress == s.realmDiamond, "ParcelRolesRegistryFacet: Only Item NFTs are supported");
         _;
     }
@@ -44,7 +47,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
   /** External Functions **/
 
-  function grantRole(Role calldata _role) external override onlyValidRole(_role.roleId) onlyOwnerOrApproved(msg.sender, _role.tokenAddress)  {
+  function grantRole(Role calldata _role) external override onlyValidRole(_role.roleId) onlyOwnerOrApproved(msg.sender, _role.tokenAddress) onlyRealm(_role.tokenAddress) {
     require(_role.expirationDate > block.timestamp, "ParcelRolesRegistryFacet: expiration date must be in the future");
 
     // Deposit NFT if necessary and get the original owner
@@ -109,9 +112,8 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @param _tokenAddress The token address.
   /// @param _operator The user approved to grant and revoke roles.
   /// @param _isApproved The approval status.
-
   function setRoleApprovalForAll(address _tokenAddress, address _operator, bool _isApproved) external {
-    s.itemsRoleApprovals[LibMeta.msgSender()][_tokenAddress][_operator] = _isApproved;
+    s.tokenApprovals[LibMeta.msgSender()][_tokenAddress][_operator] = _isApproved;
     emit RoleApprovalForAll(_tokenAddress, _operator, _isApproved);
   }
 
@@ -123,7 +125,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @param _operator The user that can grant and revoke roles.
   /// @return isApproved_ Whether the operator is approved or not.
   function isRoleApprovedForAll(address _tokenAddress, address _grantor, address _operator) public view override returns (bool) {
-    return s.itemsRoleApprovals[_grantor][_tokenAddress][_operator];
+    return s.tokenApprovals[_grantor][_tokenAddress][_operator];
   }
 
   /// @notice Checks whether an NFT has at least one non-revocable role.

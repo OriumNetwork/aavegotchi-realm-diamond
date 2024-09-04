@@ -103,13 +103,10 @@ struct InstallationAppStorage {
   mapping(uint256 => uint256) unequipTypes; // installationType.id => unequipType
   mapping(uint256 => uint256[]) parcelIdToUpgradeIds; // will not track upgrades before this variable's existence
   mapping(address => bool) gameManager;
-     // Is used for more than one NFT type.
-  mapping(address => mapping(address => mapping(address => bool))) itemsRoleApprovals;
   // ERC7432
+  mapping(address => mapping(address => mapping(address => bool))) tokenApprovals;
   mapping(address => mapping(uint256 => mapping(bytes32 => RoleData))) erc7432_roles;
-  //tokenAddress => tokenId => owner
   mapping(address => mapping(uint256 => address)) erc7432OriginalOwners;
-  // roleId => isValid
   mapping(bytes32 => bool) validRoles;
 }
 
