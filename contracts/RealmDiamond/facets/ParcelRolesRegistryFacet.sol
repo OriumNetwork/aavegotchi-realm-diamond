@@ -7,29 +7,19 @@ import {IERC721} from "../../interfaces/IERC721.sol";
 import {Modifiers, RoleData} from "../../libraries/AppStorageInstallation.sol";
 
 import {LibItems} from "../../libraries/LibItems.sol";
-
 import {LibMeta} from "../../libraries/LibMeta.sol";
 
 contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   uint256 public constant MAX_EXPIRATION_DATE = 90 days;
   uint256 constant MAX_SHARES_LENGTH = 100;
 
-    event _REALM(address realm);
-
   /** Modifiers **/
 
-    modifier onlyRealm(address _tokenAddress) {
-        emit _REALM(s.realmDiamond);
-        require(_tokenAddress == s.realmDiamond, "ParcelRolesRegistryFacet: Only Item NFTs are supported");
-        _;
-    }
+  modifier onlyRealm(address _tokenAddress) {
+    require(_tokenAddress == s.realmDiamond, "ParcelRolesRegistryFacet: Only Item NFTs are supported");
+    _;
+  }
 
-  /**
-   * @notice Checks if the sender is the owner or approved for all.
-   * @dev It reverts if the sender is not the owner or approved for all.
-   * @param _account The account to check.
-   * @param _tokenAddress The token address.
-   */
   modifier onlyOwnerOrApproved(address _account, address _tokenAddress) {
     address _sender = LibMeta.msgSender();
     require(_account == _sender || isRoleApprovedForAll(_tokenAddress, _account, _sender), "ParcelRolesRegistryFacet: account not approved");
@@ -41,13 +31,11 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     _;
   }
 
-  function isValidRole(bytes32 roleId) external view returns (bool) {
-    return s.validRoles[roleId];
-  }
-
   /** External Functions **/
 
-  function grantRole(Role calldata _role) external override onlyValidRole(_role.roleId) onlyOwnerOrApproved(msg.sender, _role.tokenAddress) onlyRealm(_role.tokenAddress) {
+  function grantRole(
+    Role calldata _role
+  ) external override onlyValidRole(_role.roleId) onlyOwnerOrApproved(_role.recipient, _role.tokenAddress) onlyRealm(_role.tokenAddress) {
     require(_role.expirationDate > block.timestamp, "ParcelRolesRegistryFacet: expiration date must be in the future");
 
     // Deposit NFT if necessary and get the original owner
@@ -79,9 +67,9 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     address _recipient = s.erc7432_roles[_tokenAddress][_tokenId][_roleId].recipient;
     address _caller = _getApprovedCaller(_tokenAddress, _tokenId, _recipient);
 
-    // if caller is recipient, the role can be revoked regardless of its state
+    // If caller is recipient, the role can be revoked regardless of its state
     if (_caller != _recipient) {
-      // if caller is owner, the role can only be revoked if revocable or expired
+      // If caller is owner, the role can only be revoked if revocable or expired
       require(
         s.erc7432_roles[_tokenAddress][_tokenId][_roleId].revocable ||
           s.erc7432_roles[_tokenAddress][_tokenId][_roleId].expirationDate < block.timestamp,
@@ -94,10 +82,11 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   }
 
   function unlockToken(address _tokenAddress, uint256 _tokenId) external override {
+    address _sender = LibMeta.msgSender(); // Optimize call here
     address originalOwner = s.erc7432OriginalOwners[_tokenAddress][_tokenId];
 
     require(
-      originalOwner == msg.sender || isRoleApprovedForAll(_tokenAddress, originalOwner, msg.sender),
+      originalOwner == _sender || isRoleApprovedForAll(_tokenAddress, originalOwner, _sender),
       "ParcelRolesRegistryFacet: sender must be owner or approved"
     );
 
@@ -108,12 +97,9 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     emit TokenUnlocked(originalOwner, _tokenAddress, _tokenId);
   }
 
-  /// @notice Approves operator to grant and revoke roles on behalf of another user.
-  /// @param _tokenAddress The token address.
-  /// @param _operator The user approved to grant and revoke roles.
-  /// @param _isApproved The approval status.
   function setRoleApprovalForAll(address _tokenAddress, address _operator, bool _isApproved) external {
-    s.tokenApprovals[LibMeta.msgSender()][_tokenAddress][_operator] = _isApproved;
+    address _sender = LibMeta.msgSender(); // Optimize call here
+    s.tokenApprovals[_sender][_tokenAddress][_operator] = _isApproved;
     emit RoleApprovalForAll(_tokenAddress, _operator, _isApproved);
   }
 
@@ -187,18 +173,18 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @return originalOwner_ The original owner of the NFT.
   function _depositNft(address _tokenAddress, uint256 _tokenId) internal returns (address originalOwner_) {
     address _currentOwner = IERC721(_tokenAddress).ownerOf(_tokenId);
-
+    address _sender = LibMeta.msgSender();
     if (_currentOwner == address(this)) {
       // if the NFT is already on the contract, check if sender is approved or original owner
       originalOwner_ = s.erc7432OriginalOwners[_tokenAddress][_tokenId];
       require(
-        originalOwner_ == msg.sender || isRoleApprovedForAll(_tokenAddress, originalOwner_, msg.sender),
+        originalOwner_ == _sender || isRoleApprovedForAll(_tokenAddress, originalOwner_, _sender),
         "ParcelRolesRegistryFacet: sender must be owner or approved"
       );
     } else {
       // if NFT is not in the contract, deposit it and store the original owner
       require(
-        _currentOwner == msg.sender || isRoleApprovedForAll(_tokenAddress, _currentOwner, msg.sender),
+        _currentOwner == _sender || isRoleApprovedForAll(_tokenAddress, _currentOwner, _sender),
         "ParcelRolesRegistryFacet: sender must be owner or approved"
       );
       IERC721(_tokenAddress).transferFrom(_currentOwner, address(this), _tokenId);
@@ -214,14 +200,15 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @param _recipient The user that received the role.
   /// @return caller_ The approved account.
   function _getApprovedCaller(address _tokenAddress, uint256 _tokenId, address _recipient) internal view returns (address caller_) {
-    if (msg.sender == _recipient || isRoleApprovedForAll(_tokenAddress, _recipient, msg.sender)) {
+    address _sender = LibMeta.msgSender();
+    if (_sender == _recipient || isRoleApprovedForAll(_tokenAddress, _recipient, _sender)) {
       return _recipient;
     }
     address originalOwner = s.erc7432OriginalOwners[_tokenAddress][_tokenId];
-    if (msg.sender == originalOwner || isRoleApprovedForAll(_tokenAddress, originalOwner, msg.sender)) {
+    if (_sender == originalOwner || isRoleApprovedForAll(_tokenAddress, originalOwner, _sender)) {
       return originalOwner;
     }
-    revert("ParcelRolesRegistryFacet: role does not exist or sender is not approved");
+    revert("ParcelRolesRegistryFacet: sender is not approved");
   }
 
   function supportsInterface(bytes4 interfaceId) external view virtual override returns (bool) {
