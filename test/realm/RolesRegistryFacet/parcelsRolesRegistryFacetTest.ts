@@ -12,7 +12,6 @@ import { maticRealmDiamondAddress } from "../../../scripts/tile/helperFunctions"
 
 import { deployParcelsRolesRegistryFacet } from "./deployTest";
 
-
 const { expect } = chai;
 
 describe("ParcelRolesRegistryFacet", async () => {
@@ -59,6 +58,7 @@ describe("ParcelRolesRegistryFacet", async () => {
     await mockERC721
       .connect(grantor)
       .approve(parcelRolesRegistryFacet.address, 1);
+
     await mockERC721
       .connect(grantor)
       .approve(parcelRolesRegistryFacet.address, 2);
@@ -79,7 +79,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
@@ -88,9 +88,7 @@ describe("ParcelRolesRegistryFacet", async () => {
       // Now try to grant the role
       await expect(
         parcelRolesRegistryFacet.connect(anotherUser).grantRole(role)
-      ).to.be.revertedWith(
-        "ParcelRolesRegistryFacet: sender must be owner or approved"
-      );
+      ).to.be.revertedWith("ParcelRolesRegistryFacet: account not approved");
     });
 
     it("should revert when expirationDate is zero", async () => {
@@ -98,7 +96,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: 0,
         revocable: true,
         data: "0x",
@@ -116,7 +114,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
@@ -141,7 +139,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
@@ -168,7 +166,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
@@ -196,7 +194,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
@@ -228,12 +226,12 @@ describe("ParcelRolesRegistryFacet", async () => {
         .withArgs(role1.tokenAddress, role1.tokenId, role1.roleId);
     });
 
-    it("should revert when sender is not grantor or approved", async () => {
+    it("should revert when sender is not grantor or approved to revole role", async () => {
       const role1 = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
@@ -260,9 +258,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         parcelRolesRegistryFacet
           .connect(anotherUser)
           .revokeRole(role1.tokenAddress, role1.tokenId, role1.roleId)
-      ).to.be.revertedWith(
-        "ParcelRolesRegistryFacet: role does not exist or sender is not approved"
-      );
+      ).to.be.revertedWith("ParcelRolesRegistryFacet: sender is not approved");
     });
 
     it("should revert when the role does not exist", async () => {
@@ -270,7 +266,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
@@ -313,7 +309,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: false,
         data: "0x",
@@ -334,7 +330,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 2,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
@@ -358,7 +354,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
-        recipient: grantee.address,
+        recipient: grantor.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
