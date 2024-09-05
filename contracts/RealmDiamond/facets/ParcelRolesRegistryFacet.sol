@@ -4,7 +4,9 @@ pragma solidity 0.8.9;
 import {IERC7432} from "../../interfaces/IERC7432.sol";
 import {IERC721} from "../../interfaces/IERC721.sol";
 
-import {Modifiers, RoleData} from "../../libraries/AppStorageInstallation.sol";
+import {Modifiers, RoleData} from "../../libraries/AppStorage.sol";
+
+import {LibAppStorageInstallation, InstallationAppStorage} from "../../libraries/AppStorageInstallation.sol";
 
 import {LibItems} from "../../libraries/LibItems.sol";
 import {LibMeta} from "../../libraries/LibMeta.sol";
@@ -16,13 +18,8 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /** Modifiers **/
 
   modifier onlyRealm(address _tokenAddress) {
-    require(_tokenAddress == s.realmDiamond, "ParcelRolesRegistryFacet: Only Item NFTs are supported");
-    _;
-  }
-
-  modifier onlyOwnerOrApproved(address _account, address _tokenAddress) {
-    address _sender = LibMeta.msgSender();
-    require(_account == _sender || isRoleApprovedForAll(_tokenAddress, _account, _sender), "ParcelRolesRegistryFacet: account not approved");
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage(); // Directly access InstallationAppStorage
+    require(_tokenAddress == si.realmDiamond, "ParcelRolesRegistryFacet: Only Item NFTs are supported");
     _;
   }
 
@@ -33,9 +30,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
   /** External Functions **/
 
-  function grantRole(
-    Role calldata _role
-  ) external override onlyValidRole(_role.roleId) onlyOwnerOrApproved(_role.recipient, _role.tokenAddress) onlyRealm(_role.tokenAddress) {
+  function grantRole(Role calldata _role) external override onlyValidRole(_role.roleId) onlyRealm(_role.tokenAddress) {
     require(_role.expirationDate > block.timestamp, "ParcelRolesRegistryFacet: expiration date must be in the future");
 
     // Deposit NFT if necessary and get the original owner
@@ -105,15 +100,6 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
   /** View Functions **/
 
-  // @notice Checks if the grantor approved the operator for all SFTs.
-  /// @param _tokenAddress The token address.
-  /// @param _grantor The user that approved the operator.
-  /// @param _operator The user that can grant and revoke roles.
-  /// @return isApproved_ Whether the operator is approved or not.
-  function isRoleApprovedForAll(address _tokenAddress, address _grantor, address _operator) public view override returns (bool) {
-    return s.tokenApprovals[_grantor][_tokenAddress][_operator];
-  }
-
   /// @notice Checks whether an NFT has at least one non-revocable role.
   /// @param _tokenAddress The token address.
   /// @param _tokenId The token identifier.
@@ -133,6 +119,15 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   }
 
   /** ERC-7432 View Functions **/
+
+  // @notice Checks if the grantor approved the operator for all SFTs.
+  /// @param _tokenAddress The token address.
+  /// @param _grantor The user that approved the operator.
+  /// @param _operator The user that can grant and revoke roles.
+  /// @return isApproved_ Whether the operator is approved or not.
+  function isRoleApprovedForAll(address _tokenAddress, address _grantor, address _operator) public view override returns (bool) {
+    return s.tokenApprovals[_grantor][_tokenAddress][_operator];
+  }
 
   function ownerOf(address _tokenAddress, uint256 _tokenId) external view override returns (address owner_) {
     return s.erc7432OriginalOwners[_tokenAddress][_tokenId];
