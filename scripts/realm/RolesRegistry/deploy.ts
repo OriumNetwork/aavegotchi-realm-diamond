@@ -10,7 +10,7 @@ import { InitParcelsRolesRegistryFacetInterface } from "../../../typechain-types
 
 import { ethers, run } from "hardhat";
 
-export async function deployParcelsRolesRegistryFacet(mockERC721Address: string) {
+export async function deployParcelsRolesRegistryFacet() {
     const vars = await varsForNetwork(ethers);
   const facets: FacetsAndAddSelectors[] = [
     {
@@ -27,8 +27,7 @@ export async function deployParcelsRolesRegistryFacet(mockERC721Address: string)
         "function roleExpirationDate(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) external view returns (uint64 expirationDate_)",
         "function isRoleRevocable(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) external view returns (bool revocable_)",
         "function isRoleApprovedForAll(address _tokenAddress, address _owner, address _operator) external view returns (bool)",
-        "function MAX_EXPIRATION_DATE()",
-        "function isValidRole(bytes32 roleId) external view returns (bool)"
+        "function MAX_EXPIRATION_DATE()"
       ],
       removeSelectors: [],
     },
