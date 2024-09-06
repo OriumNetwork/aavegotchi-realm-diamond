@@ -13,6 +13,7 @@ import { maticRealmDiamondAddress } from "../../../scripts/tile/helperFunctions"
 import { deployParcelsRolesRegistryFacet } from "./deployTest";
 
 const { expect } = chai;
+const { AddressZero, HashZero } = ethers.constants;
 
 describe("ParcelRolesRegistryFacet", async () => {
   let parcelRolesRegistryFacet: Contract;
@@ -20,8 +21,8 @@ describe("ParcelRolesRegistryFacet", async () => {
   let lender: SignerWithAddress;
   let grantee: SignerWithAddress;
   let anotherUser: SignerWithAddress;
-  let mockERC721: any;
-  let anotherMockERC721: any;
+  let mockERC721: Contract;
+  let anotherMockERC721: Contract;
   const ONE_DAY = 60 * 60 * 24;
 
   const realmDiamondAddress = maticRealmDiamondAddress;
@@ -324,6 +325,75 @@ describe("ParcelRolesRegistryFacet", async () => {
         .withArgs(role1.tokenAddress, role1.tokenId, role1.roleId);
     });
 
+    it("should revoke role when sender is owner, and role is not revocable but is expired", async () => {
+      const role2 = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 2,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
+      };
+
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role2))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role2.tokenAddress,
+          role2.tokenId,
+          role2.roleId,
+          owner.address,
+          role2.recipient,
+          role2.expirationDate,
+          role2.revocable,
+          role2.data
+        );
+
+      await network.provider.send("evm_increaseTime", [ONE_DAY + 10]);
+      await network.provider.send("evm_mine");
+
+      await expect(
+        parcelRolesRegistryFacet
+          .connect(owner)
+          .revokeRole(role2.tokenAddress, role2.tokenId, role2.roleId)
+      )
+        .to.emit(parcelRolesRegistryFacet, "RoleRevoked")
+        .withArgs(role2.tokenAddress, role2.tokenId, role2.roleId);
+    });
+
+    it("should revoke role when sender is owner, and role is revocable", async () => {
+      const role2 = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 2,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
+      };
+
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role2))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role2.tokenAddress,
+          role2.tokenId,
+          role2.roleId,
+          owner.address,
+          role2.recipient,
+          role2.expirationDate,
+          role2.revocable,
+          role2.data
+        );
+
+      await expect(
+        parcelRolesRegistryFacet
+          .connect(owner)
+          .revokeRole(role2.tokenAddress, role2.tokenId, role2.roleId)
+      )
+        .to.emit(parcelRolesRegistryFacet, "RoleRevoked")
+        .withArgs(role2.tokenAddress, role2.tokenId, role2.roleId);
+    });
+
     it("should revert when sender is not owner or approved to revoke role", async () => {
       await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
         .to.emit(parcelRolesRegistryFacet, "RoleGranted")
@@ -367,6 +437,45 @@ describe("ParcelRolesRegistryFacet", async () => {
         parcelRolesRegistryFacet
           .connect(owner)
           .revokeRole(role1.tokenAddress, role1.tokenId, ROLE_TEST)
+      ).to.be.revertedWith("ParcelRolesRegistryFacet: role does not exist");
+    });
+
+    it("should revert if role was already revoked", async () => {
+      const role2 = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 2,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
+      };
+
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role2))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role2.tokenAddress,
+          role2.tokenId,
+          role2.roleId,
+          owner.address,
+          role2.recipient,
+          role2.expirationDate,
+          role2.revocable,
+          role2.data
+        );
+
+      await expect(
+        parcelRolesRegistryFacet
+          .connect(owner)
+          .revokeRole(role2.tokenAddress, role2.tokenId, role2.roleId)
+      )
+        .to.emit(parcelRolesRegistryFacet, "RoleRevoked")
+        .withArgs(role2.tokenAddress, role2.tokenId, role2.roleId);
+
+      await expect(
+        parcelRolesRegistryFacet
+          .connect(owner)
+          .revokeRole(role2.tokenAddress, role2.tokenId, role2.roleId)
       ).to.be.revertedWith("ParcelRolesRegistryFacet: role does not exist");
     });
 
@@ -554,6 +663,25 @@ describe("ParcelRolesRegistryFacet", async () => {
           .connect(owner)
           .unlockToken(role1.tokenAddress, role1.tokenId)
       ).to.be.revertedWith("ParcelRolesRegistryFacet: NFT is locked");
+    });
+    it("should revert if sender is not original owner or approved", async () => {
+      role1 = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 5,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
+      };
+
+      await expect(
+        parcelRolesRegistryFacet
+          .connect(owner)
+          .unlockToken(role1.tokenAddress, role1.tokenId + 1)
+      ).to.be.revertedWith(
+        "ParcelRolesRegistryFacet: sender must be owner or approved"
+      );
     });
   });
 
