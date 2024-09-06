@@ -2,7 +2,7 @@
 /* eslint prefer-const: "off" */
 
 //@ts-ignore
-import { ethers , network } from "hardhat";
+import { ethers, network } from "hardhat";
 import chai from "chai";
 
 import { Contract } from "ethers";
@@ -16,7 +16,7 @@ const { expect } = chai;
 
 describe("ParcelRolesRegistryFacet", async () => {
   let parcelRolesRegistryFacet: Contract;
-  let grantor: SignerWithAddress;
+  let owner: SignerWithAddress;
   let lender: SignerWithAddress;
   let grantee: SignerWithAddress;
   let anotherUser: SignerWithAddress;
@@ -29,6 +29,11 @@ describe("ParcelRolesRegistryFacet", async () => {
   const ROLE_ALCHEMICA_CHANNELING = ethers.utils.keccak256(
     ethers.utils.toUtf8Bytes("AlchemicaChanneling()")
   );
+
+  const ROLE_EQUIP_INSTALLATIONS = ethers.utils.keccak256(
+    ethers.utils.toUtf8Bytes("EquipInstallations()")
+  );
+
   const ROLE_TEST = ethers.utils.keccak256(
     ethers.utils.toUtf8Bytes("testRole()")
   );
@@ -45,7 +50,7 @@ describe("ParcelRolesRegistryFacet", async () => {
       ],
     });
     const signers = await ethers.getSigners();
-    grantor = signers[0];
+    owner = signers[0];
     grantee = signers[1];
     lender = signers[2];
     anotherUser = signers[3];
@@ -59,29 +64,40 @@ describe("ParcelRolesRegistryFacet", async () => {
     anotherMockERC721 = await AnotherMockERC721.deploy();
     await anotherMockERC721.deployed();
 
-
     await deployParcelsRolesRegistryFacet(mockERC721.address);
 
-    // Mint a token to the grantor
-    await mockERC721.mint(grantor.address);
-    await mockERC721.mint(grantor.address);
+    // Mint a token to the owner
+    await mockERC721.mint(owner.address);
+    await mockERC721.mint(owner.address);
+    await mockERC721.mint(owner.address);
+    await mockERC721.mint(owner.address);
+    await mockERC721.mint(owner.address);
 
     parcelRolesRegistryFacet = await ethers.getContractAt(
       "ParcelRolesRegistryFacet",
       realmDiamondAddress
     );
-    // Approve the facet contract to manage grantor's tokens
+    // Approve the facet contract to manage owner's tokens
     await mockERC721
-      .connect(grantor)
+      .connect(owner)
       .approve(parcelRolesRegistryFacet.address, 1);
 
     await mockERC721
-      .connect(grantor)
+      .connect(owner)
       .approve(parcelRolesRegistryFacet.address, 2);
+    await mockERC721
+      .connect(owner)
+      .approve(parcelRolesRegistryFacet.address, 3);
+    await mockERC721
+      .connect(owner)
+      .approve(parcelRolesRegistryFacet.address, 4);
+    await mockERC721
+      .connect(owner)
+      .approve(parcelRolesRegistryFacet.address, 5);
 
     // Set role approval for the facet contract
     await parcelRolesRegistryFacet
-      .connect(grantor)
+      .connect(owner)
       .setRoleApprovalForAll(
         mockERC721.address,
         parcelRolesRegistryFacet.address,
@@ -90,7 +106,7 @@ describe("ParcelRolesRegistryFacet", async () => {
   });
 
   describe("grantRole", async () => {
-    it("should revert when sender is not grantor or approved", async () => {
+    it("should revert when sender is not owner or approved", async () => {
       const role = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
@@ -103,6 +119,28 @@ describe("ParcelRolesRegistryFacet", async () => {
 
       await expect(
         parcelRolesRegistryFacet.connect(anotherUser).grantRole(role)
+      ).to.be.revertedWith(
+        "ParcelRolesRegistryFacet: sender must be owner or approved"
+      );
+    });
+
+    it("should revert when the user is not approved nor the original owner of the NFT", async () => {
+      const role = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 1,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
+      };
+
+      await parcelRolesRegistryFacet
+        .connect(anotherUser)
+        .setRoleApprovalForAll(role.tokenAddress, grantee.address, true);
+
+      await expect(
+        parcelRolesRegistryFacet.connect(grantee).grantRole(role)
       ).to.be.revertedWith(
         "ParcelRolesRegistryFacet: sender must be owner or approved"
       );
@@ -122,7 +160,7 @@ describe("ParcelRolesRegistryFacet", async () => {
       await expect(
         parcelRolesRegistryFacet.connect(anotherUser).grantRole(role)
       ).to.be.revertedWith(
-        "ParcelRolesRegistryFacet: Only Item NFTs are supported"
+        "ParcelRolesRegistryFacet: Only Realm NFTs are supported"
       );
     });
 
@@ -154,13 +192,13 @@ describe("ParcelRolesRegistryFacet", async () => {
       };
 
       await expect(
-        parcelRolesRegistryFacet.connect(grantor).grantRole(role)
+        parcelRolesRegistryFacet.connect(owner).grantRole(role)
       ).to.be.revertedWith(
         "ParcelRolesRegistryFacet: expiration date must be in the future"
       );
     });
 
-    it("should grant role when sender is grantor", async () => {
+    it("should grant role when sender is owner", async () => {
       const role = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
@@ -171,13 +209,44 @@ describe("ParcelRolesRegistryFacet", async () => {
         data: "0x",
       };
 
-      await expect(parcelRolesRegistryFacet.connect(grantor).grantRole(role))
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role))
         .to.emit(parcelRolesRegistryFacet, "RoleGranted")
         .withArgs(
           role.tokenAddress,
           role.tokenId,
           role.roleId,
-          grantor.address,
+          owner.address,
+          role.recipient,
+          role.expirationDate,
+          role.revocable,
+          role.data
+        );
+    });
+
+    it("should grant role when sender is approved by owner", async () => {
+      const role = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 1,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
+      };
+
+      await parcelRolesRegistryFacet
+        .connect(owner)
+        .setRoleApprovalForAll(role.tokenAddress, anotherUser.address, true);
+
+      await expect(
+        parcelRolesRegistryFacet.connect(anotherUser).grantRole(role)
+      )
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role.tokenAddress,
+          role.tokenId,
+          role.roleId,
+          owner.address,
           role.recipient,
           role.expirationDate,
           role.revocable,
@@ -185,7 +254,6 @@ describe("ParcelRolesRegistryFacet", async () => {
         );
     });
   });
-
 
   describe("revokeRole", async () => {
     let role1: {
@@ -210,14 +278,14 @@ describe("ParcelRolesRegistryFacet", async () => {
       };
     });
 
-    it("should revoke role when sender is grantor", async () => {
-      await expect(parcelRolesRegistryFacet.connect(grantor).grantRole(role1))
+    it("should revoke role when sender is owner", async () => {
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
         .to.emit(parcelRolesRegistryFacet, "RoleGranted")
         .withArgs(
           role1.tokenAddress,
           role1.tokenId,
           role1.roleId,
-          grantor.address,
+          owner.address,
           role1.recipient,
           role1.expirationDate,
           role1.revocable,
@@ -225,18 +293,18 @@ describe("ParcelRolesRegistryFacet", async () => {
         );
 
       await parcelRolesRegistryFacet
-        .connect(grantor)
+        .connect(owner)
         .revokeRole(role1.tokenAddress, role1.tokenId, role1.roleId);
     });
 
     it("should revoke role when sender is approved", async () => {
-      await expect(parcelRolesRegistryFacet.connect(grantor).grantRole(role1))
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
         .to.emit(parcelRolesRegistryFacet, "RoleGranted")
         .withArgs(
           role1.tokenAddress,
           role1.tokenId,
           role1.roleId,
-          grantor.address,
+          owner.address,
           role1.recipient,
           role1.expirationDate,
           role1.revocable,
@@ -244,7 +312,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         );
 
       await parcelRolesRegistryFacet
-        .connect(grantor)
+        .connect(owner)
         .setRoleApprovalForAll(role1.tokenAddress, anotherUser.address, true);
 
       await expect(
@@ -256,14 +324,14 @@ describe("ParcelRolesRegistryFacet", async () => {
         .withArgs(role1.tokenAddress, role1.tokenId, role1.roleId);
     });
 
-    it("should revert when sender is not grantor or approved to revoke role", async () => {
-      await expect(parcelRolesRegistryFacet.connect(grantor).grantRole(role1))
+    it("should revert when sender is not owner or approved to revoke role", async () => {
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
         .to.emit(parcelRolesRegistryFacet, "RoleGranted")
         .withArgs(
           role1.tokenAddress,
           role1.tokenId,
           role1.roleId,
-          grantor.address,
+          owner.address,
           role1.recipient,
           role1.expirationDate,
           role1.revocable,
@@ -271,7 +339,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         );
 
       await parcelRolesRegistryFacet
-        .connect(grantor)
+        .connect(owner)
         .setRoleApprovalForAll(role1.tokenAddress, anotherUser.address, false);
 
       await expect(
@@ -282,13 +350,13 @@ describe("ParcelRolesRegistryFacet", async () => {
     });
 
     it("should revert when the role does not exist", async () => {
-      await expect(parcelRolesRegistryFacet.connect(grantor).grantRole(role1))
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
         .to.emit(parcelRolesRegistryFacet, "RoleGranted")
         .withArgs(
           role1.tokenAddress,
           role1.tokenId,
           role1.roleId,
-          grantor.address,
+          owner.address,
           role1.recipient,
           role1.expirationDate,
           role1.revocable,
@@ -297,14 +365,13 @@ describe("ParcelRolesRegistryFacet", async () => {
 
       await expect(
         parcelRolesRegistryFacet
-          .connect(grantor)
+          .connect(owner)
           .revokeRole(role1.tokenAddress, role1.tokenId, ROLE_TEST)
       ).to.be.revertedWith("ParcelRolesRegistryFacet: role does not exist");
     });
 
     it("should revert when role is not revocable nor expired", async () => {
-
-     const role = {
+      const role = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
         tokenId: 1,
@@ -314,13 +381,13 @@ describe("ParcelRolesRegistryFacet", async () => {
         data: "0x",
       };
 
-      await expect(parcelRolesRegistryFacet.connect(grantor).grantRole(role))
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role))
         .to.emit(parcelRolesRegistryFacet, "RoleGranted")
         .withArgs(
           role.tokenAddress,
           role.tokenId,
           role.roleId,
-          grantor.address,
+          owner.address,
           role.recipient,
           role.expirationDate,
           false,
@@ -329,7 +396,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
       await expect(
         parcelRolesRegistryFacet
-          .connect(grantor)
+          .connect(owner)
           .revokeRole(role.tokenAddress, role.tokenId, role.roleId)
       ).to.be.revertedWith(
         "ParcelRolesRegistryFacet: role is not revocable nor expired"
@@ -352,38 +419,139 @@ describe("ParcelRolesRegistryFacet", async () => {
       role1 = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
-        tokenId: 2,
+        tokenId: 3,
         recipient: grantee.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: true,
         data: "0x",
       };
 
-      await parcelRolesRegistryFacet.connect(grantor).grantRole(role1);
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role1.tokenAddress,
+          role1.tokenId,
+          role1.roleId,
+          owner.address,
+          role1.recipient,
+          role1.expirationDate,
+          role1.revocable,
+          role1.data
+        );
+
+      role1 = {
+        roleId: ROLE_EQUIP_INSTALLATIONS,
+        tokenAddress: mockERC721.address,
+        tokenId: 3,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
+      };
+
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role1.tokenAddress,
+          role1.tokenId,
+          role1.roleId,
+          owner.address,
+          role1.recipient,
+          role1.expirationDate,
+          role1.revocable,
+          role1.data
+        );
 
       await expect(
         parcelRolesRegistryFacet
-          .connect(grantor)
+          .connect(owner)
           .unlockToken(role1.tokenAddress, role1.tokenId)
       )
         .to.emit(parcelRolesRegistryFacet, "TokenUnlocked")
-        .withArgs(grantor.address, role1.tokenAddress, role1.tokenId);
+        .withArgs(owner.address, role1.tokenAddress, role1.tokenId);
     });
 
-    it("should revert when NFT is locked with non-revocable role", async () => {
+    it("should revert unlock token when one role is non revocable or non expired", async () => {
       role1 = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
-        tokenId: 1,
+        tokenId: 4,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
+      };
+
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role1.tokenAddress,
+          role1.tokenId,
+          role1.roleId,
+          owner.address,
+          role1.recipient,
+          role1.expirationDate,
+          role1.revocable,
+          role1.data
+        );
+
+      role1 = {
+        roleId: ROLE_EQUIP_INSTALLATIONS,
+        tokenAddress: mockERC721.address,
+        tokenId: 4,
         recipient: grantee.address,
         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
         revocable: false,
         data: "0x",
       };
 
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role1.tokenAddress,
+          role1.tokenId,
+          role1.roleId,
+          owner.address,
+          role1.recipient,
+          role1.expirationDate,
+          role1.revocable,
+          role1.data
+        );
+
       await expect(
         parcelRolesRegistryFacet
-          .connect(grantor)
+          .connect(owner)
+          .unlockToken(role1.tokenAddress, role1.tokenId)
+      ).to.be.revertedWith("ParcelRolesRegistryFacet: NFT is locked");
+    });
+
+    it("should revert when NFT is locked with non-revocable role", async () => {
+      role1 = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 5,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: false,
+        data: "0x",
+      };
+
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role1.tokenAddress,
+          role1.tokenId,
+          role1.roleId,
+          owner.address,
+          role1.recipient,
+          role1.expirationDate,
+          role1.revocable,
+          role1.data
+        );
+
+      await expect(
+        parcelRolesRegistryFacet
+          .connect(owner)
           .unlockToken(role1.tokenAddress, role1.tokenId)
       ).to.be.revertedWith("ParcelRolesRegistryFacet: NFT is locked");
     });
@@ -403,7 +571,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
       await expect(
         parcelRolesRegistryFacet
-          .connect(grantor)
+          .connect(owner)
           .setRoleApprovalForAll(role1.tokenAddress, anotherUser.address, true)
       )
         .to.emit(parcelRolesRegistryFacet, "RoleApprovalForAll")

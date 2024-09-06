@@ -12,14 +12,11 @@ import {LibItems} from "../../libraries/LibItems.sol";
 import {LibMeta} from "../../libraries/LibMeta.sol";
 
 contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
-  uint256 public constant MAX_EXPIRATION_DATE = 90 days;
-  uint256 constant MAX_SHARES_LENGTH = 100;
-
   /** Modifiers **/
 
   modifier onlyRealm(address _tokenAddress) {
-    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage(); // Directly access InstallationAppStorage
-    require(_tokenAddress == si.realmDiamond, "ParcelRolesRegistryFacet: Only Item NFTs are supported");
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
+    require(_tokenAddress == si.realmDiamond, "ParcelRolesRegistryFacet: Only Realm NFTs are supported");
     _;
   }
 
@@ -77,7 +74,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   }
 
   function unlockToken(address _tokenAddress, uint256 _tokenId) external override {
-    address _sender = LibMeta.msgSender(); // Optimize call here
+    address _sender = LibMeta.msgSender();
     address originalOwner = s.erc7432OriginalOwners[_tokenAddress][_tokenId];
 
     require(
@@ -93,7 +90,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   }
 
   function setRoleApprovalForAll(address _tokenAddress, address _operator, bool _isApproved) external {
-    address _sender = LibMeta.msgSender(); // Optimize call here
+    address _sender = LibMeta.msgSender();
     s.tokenApprovals[_sender][_tokenAddress][_operator] = _isApproved;
     emit RoleApprovalForAll(_tokenAddress, _operator, _isApproved);
   }
@@ -115,18 +112,23 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
   function _checkRole(address _tokenAddress, uint256 _tokenId, bytes32 roleId) internal view returns (bool) {
     RoleData storage _roleData = s.erc7432_roles[_tokenAddress][_tokenId][roleId];
-    return (_roleData.expirationDate > block.timestamp && !_roleData.revocable);
+
+    if (_roleData.recipient == address(0)) {
+      return false;
+    }
+    
+    return (_roleData.expirationDate < block.timestamp || !_roleData.revocable);
   }
 
   /** ERC-7432 View Functions **/
 
-  // @notice Checks if the grantor approved the operator for all SFTs.
+  // @notice Checks if the owner approved the operator for all SFTs.
   /// @param _tokenAddress The token address.
-  /// @param _grantor The user that approved the operator.
+  /// @param _owner The user that approved the operator.
   /// @param _operator The user that can grant and revoke roles.
   /// @return isApproved_ Whether the operator is approved or not.
-  function isRoleApprovedForAll(address _tokenAddress, address _grantor, address _operator) public view override returns (bool) {
-    return s.tokenApprovals[_grantor][_tokenAddress][_operator];
+  function isRoleApprovedForAll(address _tokenAddress, address _owner, address _operator) public view override returns (bool) {
+    return s.tokenApprovals[_owner][_tokenAddress][_operator];
   }
 
   function ownerOf(address _tokenAddress, uint256 _tokenId) external view override returns (address owner_) {
