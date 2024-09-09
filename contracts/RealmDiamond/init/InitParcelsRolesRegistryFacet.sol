@@ -15,13 +15,15 @@ contract InitParcelsRolesRegistryFacet {
         ds.supportedInterfaces[type(IERC7432).interfaceId] = true;
         ds.supportedInterfaces[type(IERC721Receiver).interfaceId] = true;
 
-          bytes32[5] memory initialRoles = [
-            keccak256("AlchemicaChanneling()"),
-            keccak256("EmptyReservoir()"),
-            keccak256("EquipInstallations()"),
-            keccak256("EquipTiles()"),
-            keccak256("UpgradeInstallations()")
-        ];
+          bytes32[7] memory initialRoles = [
+            keccak256("AlchemicaChanneling()"),       // 0: Channeling
+            keccak256("EmptyReservoir()"),            // 1: Empty Reservoir
+            keccak256("EquipInstallations()"),        // 2: Equip Installations
+            keccak256("EquipTiles()"),                // 3: Equip Tiles
+            keccak256("UnequipInstallations()"),      // 4: Unequip Installations
+            keccak256("UnequipTiles()"),              // 5: Unequip Tiles
+            keccak256("UpgradeInstallations()")       // 6: Upgrade Installations
+       ];
 
         for (uint256 i = 0; i < initialRoles.length; i++) {
             s.validRoles[initialRoles[i]] = true;

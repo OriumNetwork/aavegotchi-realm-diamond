@@ -201,39 +201,49 @@ library LibRealm {
     uint256 _gotchiId,
     uint256 _actionRight,
     address _sender
-) internal view {
+  ) internal view {
     AppStorage storage s = LibAppStorage.diamondStorage();
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
     InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
+  
+    uint256 accessRight = s.accessRights[_realmId][_actionRight];
+    address parcelOwner = s.parcels[_realmId].owner;
+
     IERC7432 rolesRegistry = IERC7432(s.parcelRolesRegistryFacetAddress);
 
-    // Directly access storage instead of assigning intermediate variables
-    bytes32 roleId = s.actionRightToRole[_actionRight];
-    address roleRecipient = rolesRegistry.recipientOf(si.realmDiamond, _realmId, roleId);
+    address roleRecipient = rolesRegistry.recipientOf(si.realmDiamond, _realmId, s.actionRightToRole[_actionRight]);
 
     if (roleRecipient == _sender) {
-        return;
+        return;  
     }
 
-    // Combine the logic to minimize stack usage
-    if (s.accessRights[_realmId][_actionRight] == 0) {
-        require(_sender == s.parcels[_realmId].owner, "LibRealm: Access Right - Only Owner");
-    } else if (s.accessRights[_realmId][_actionRight] == 1) {
-        if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
-            AavegotchiDiamond.GotchiLending memory listing = diamond.getGotchiLendingFromToken(uint32(_gotchiId));
-            require(
-                _sender == s.parcels[_realmId].owner || (_sender == listing.borrower && listing.lender == s.parcels[_realmId].owner),
-                "LibRealm: Access Right - Only Owner/Borrower"
-            );
-        } else {
-            require(_sender == s.parcels[_realmId].owner, "LibRealm: Access Right - Only Owner");
-        }
-    } else if (s.accessRights[_realmId][_actionRight] == 2) {
-        require(diamond.isWhitelisted(s.whitelistIds[_realmId][_actionRight], _sender) > 0, "LibRealm: Access Right - Only Whitelisted");
-    } else if (s.accessRights[_realmId][_actionRight] == 4) {
-        // Anyone can perform this action; no require statement needed
+    //Only owner
+    if (accessRight == 0) {
+      require(_sender == parcelOwner, "LibRealm: Access Right - Only Owner");
     }
-}
+    //Owner or borrowed gotchi
+    else if (accessRight == 1) {
+      if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
+        AavegotchiDiamond.GotchiLending memory listing = diamond.getGotchiLendingFromToken(uint32(_gotchiId));
+        require(
+          _sender == parcelOwner || (_sender == listing.borrower && listing.lender == parcelOwner),
+          "LibRealm: Access Right - Only Owner/Borrower"
+        );
+      } else {
+        require(_sender == parcelOwner, "LibRealm: Access Right - Only Owner");
+      }
+    }
+    //whitelisted addresses
+    else if (accessRight == 2) {
+      require(diamond.isWhitelisted(s.whitelistIds[_realmId][_actionRight], _sender) > 0, "LibRealm: Access Right - Only Whitelisted");
+    }
+    // //blacklisted addresses
+    // else if (accessRight == 3) {}
+    //anyone
+    else if (accessRight == 4) {
+      //do nothing! anyone can perform this action
+    }
+  }
 
   function installationInUpgradeQueue(
     uint256 _realmId,
