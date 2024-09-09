@@ -25,6 +25,7 @@ contract InitParcelsRolesRegistryFacet {
 
         for (uint256 i = 0; i < initialRoles.length; i++) {
             s.validRoles[initialRoles[i]] = true;
+            s.actionRightToRole[i] = initialRoles[i];  // Map actionRight index to role ID
         }
     }
 }

@@ -27,7 +27,7 @@ struct Parcel {
   uint256 district;
   uint256 size; //0=humble, 1=reasonable, 2=spacious vertical, 3=spacious horizontal, 4=partner
   uint256[64][64] buildGrid; //x, then y array of positions - for installations
-  uint256[64][64] tileGrid; //x, then y array of positions - for tiles under the installations (floor)
+  uint256[64][64] tileGrid; //x, then y array of positions - for tiles under the installations (floor) 
   uint256[4] alchemicaBoost; //fud, fomo, alpha, kek
   uint256[4] alchemicaRemaining; //fud, fomo, alpha, kek
   uint256 currentRound; //begins at 0 and increments after surveying has begun
@@ -118,11 +118,13 @@ struct AppStorage {
   mapping(uint256 => BounceGate) bounceGates;
   // parcelId => action: 0 Alchemical Channeling, 1 Emptying Reservoirs => whitelistIds
   mapping(uint256 => mapping(uint256 => uint32)) whitelistIds;
-    // ERC7432
+  // ERC7432
   mapping(address => mapping(address => mapping(address => bool))) tokenApprovals;
   mapping(address => mapping(uint256 => mapping(bytes32 => RoleData))) erc7432_roles;
   mapping(address => mapping(uint256 => address)) erc7432OriginalOwners;
   mapping(bytes32 => bool) validRoles;
+  mapping(uint256 => bytes32) actionRightToRole;  // Map actionRight index to role ID
+  address parcelRolesRegistryFacetAddress;
 }
 
 library LibAppStorage {

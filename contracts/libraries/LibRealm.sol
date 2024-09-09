@@ -3,6 +3,8 @@ pragma solidity 0.8.9;
 
 import {InstallationDiamondInterface} from "../interfaces/InstallationDiamondInterface.sol";
 import {TileDiamondInterface} from "../interfaces/TileDiamond.sol";
+import {IERC7432} from "../interfaces/IERC7432.sol";
+import {LibAppStorageInstallation, InstallationAppStorage} from "../libraries/AppStorageInstallation.sol";
 import "./AppStorage.sol";
 import "./BinomialRandomizer.sol";
 
@@ -12,12 +14,7 @@ library LibRealm {
   uint256 constant MAX_SUPPLY = 420069;
 
   //Place installation
-  function placeInstallation(
-    uint256 _realmId,
-    uint256 _installationId,
-    uint256 _x,
-    uint256 _y
-  ) internal {
+  function placeInstallation(uint256 _realmId, uint256 _installationId, uint256 _x, uint256 _y) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
     uint256[5] memory widths = getWidths();
 
@@ -43,12 +40,7 @@ library LibRealm {
     }
   }
 
-  function removeInstallation(
-    uint256 _realmId,
-    uint256 _installationId,
-    uint256 _x,
-    uint256 _y
-  ) internal {
+  function removeInstallation(uint256 _realmId, uint256 _installationId, uint256 _x, uint256 _y) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
     InstallationDiamondInterface installationsDiamond = InstallationDiamondInterface(s.installationsDiamond);
     InstallationDiamondInterface.InstallationType memory installation = installationsDiamond.getInstallationType(_installationId);
@@ -63,12 +55,7 @@ library LibRealm {
     parcel.startPositionBuildGrid[_x][_y] = 0;
   }
 
-  function placeTile(
-    uint256 _realmId,
-    uint256 _tileId,
-    uint256 _x,
-    uint256 _y
-  ) internal {
+  function placeTile(uint256 _realmId, uint256 _tileId, uint256 _x, uint256 _y) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
     uint256[5] memory widths = getWidths();
 
@@ -93,12 +80,7 @@ library LibRealm {
     }
   }
 
-  function removeTile(
-    uint256 _realmId,
-    uint256 _tileId,
-    uint256 _x,
-    uint256 _y
-  ) internal {
+  function removeTile(uint256 _realmId, uint256 _tileId, uint256 _x, uint256 _y) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
     TileDiamondInterface tilesDiamond = TileDiamondInterface(s.tileDiamond);
     TileDiamondInterface.TileType memory tile = tilesDiamond.getTileType(_tileId);
@@ -115,20 +97,12 @@ library LibRealm {
     parcel.startPositionTileGrid[_x][_y] = 0;
   }
 
-  function calculateAmount(
-    uint256 _tokenId,
-    uint256[] memory randomWords,
-    uint256 i
-  ) internal view returns (uint256) {
+  function calculateAmount(uint256 _tokenId, uint256[] memory randomWords, uint256 i) internal view returns (uint256) {
     AppStorage storage s = LibAppStorage.diamondStorage();
     return BinomialRandomizer.calculateAlchemicaSurveyAmount(randomWords[i], s.totalAlchemicas[s.parcels[_tokenId].size][i]);
   }
 
-  function updateRemainingAlchemica(
-    uint256 _tokenId,
-    uint256[] memory randomWords,
-    uint256 _round
-  ) internal {
+  function updateRemainingAlchemica(uint256 _tokenId, uint256[] memory randomWords, uint256 _round) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     s.parcels[_tokenId].currentRound++;
@@ -194,52 +168,47 @@ library LibRealm {
     return false;
   }
 
-  function verifyAccessRight(
-    uint256 _realmId,
-    uint256 _gotchiId,
-    uint256 _actionRight,
-    address _sender
-  ) internal view {
+  function verifyAccessRight(uint256 _realmId, uint256 _gotchiId, uint256 _actionRight, address _sender) internal view {
     AppStorage storage s = LibAppStorage.diamondStorage();
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
+    IERC7432 rolesRegistry = IERC7432(s.parcelRolesRegistryFacetAddress);
 
-    uint256 accessRight = s.accessRights[_realmId][_actionRight];
-    address parcelOwner = s.parcels[_realmId].owner;
+    bytes32 roleId = s.actionRightToRole[_actionRight];
+    address roleRecipient = rolesRegistry.recipientOf(si.realmDiamond, _realmId, roleId);
 
-    //Only owner
-    if (accessRight == 0) {
-      require(_sender == parcelOwner, "LibRealm: Access Right - Only Owner");
+    if (roleRecipient == _sender) {
+      return;
     }
-    //Owner or borrowed gotchi
-    else if (accessRight == 1) {
+
+    if (s.accessRights[_realmId][_actionRight] == 0) {
+
+      require(_sender == s.parcels[_realmId].owner, "LibRealm: Access Right - Only Owner");
+
+    } else if (s.accessRights[_realmId][_actionRight] == 1) {
+
       if (diamond.isAavegotchiLent(uint32(_gotchiId))) {
         AavegotchiDiamond.GotchiLending memory listing = diamond.getGotchiLendingFromToken(uint32(_gotchiId));
         require(
-          _sender == parcelOwner || (_sender == listing.borrower && listing.lender == parcelOwner),
+          _sender == s.parcels[_realmId].owner || (_sender == listing.borrower && listing.lender == s.parcels[_realmId].owner),
           "LibRealm: Access Right - Only Owner/Borrower"
         );
+        
       } else {
-        require(_sender == parcelOwner, "LibRealm: Access Right - Only Owner");
+    
+        require(_sender == s.parcels[_realmId].owner, "LibRealm: Access Right - Only Owner");
+     
       }
-    }
-    //whitelisted addresses
-    else if (accessRight == 2) {
+    } else if (s.accessRights[_realmId][_actionRight] == 2) {
+
       require(diamond.isWhitelisted(s.whitelistIds[_realmId][_actionRight], _sender) > 0, "LibRealm: Access Right - Only Whitelisted");
-    }
-    // //blacklisted addresses
-    // else if (accessRight == 3) {}
-    //anyone
-    else if (accessRight == 4) {
-      //do nothing! anyone can perform this action
+   
+    } else if (s.accessRights[_realmId][_actionRight] == 4) {
+      // Anyone can perform this action; no require statement needed
     }
   }
 
-  function installationInUpgradeQueue(
-    uint256 _realmId,
-    uint256 _installationId,
-    uint256 _x,
-    uint256 _y
-  ) internal view returns (bool) {
+  function installationInUpgradeQueue(uint256 _realmId, uint256 _installationId, uint256 _x, uint256 _y) internal view returns (bool) {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     InstallationDiamondInterface installationsDiamond = InstallationDiamondInterface(s.installationsDiamond);
