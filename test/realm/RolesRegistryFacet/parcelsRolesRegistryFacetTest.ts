@@ -23,6 +23,7 @@ describe("ParcelRolesRegistryFacet", async () => {
   let anotherUser: SignerWithAddress;
   let mockERC721: Contract;
   let anotherMockERC721: Contract;
+  let testContract: Contract;
   const ONE_DAY = 60 * 60 * 24;
 
   const realmDiamondAddress = maticRealmDiamondAddress;
@@ -65,6 +66,16 @@ describe("ParcelRolesRegistryFacet", async () => {
     anotherMockERC721 = await AnotherMockERC721.deploy();
     await anotherMockERC721.deployed();
 
+    const TestVerifyAccessRight = await ethers.getContractFactory("TestVerifyAccessRight");
+    testContract = await TestVerifyAccessRight.deploy();
+    await testContract.deployed();
+
+    await testContract.setParcelOwner(1, grantee.address);
+
+    // Set the roles registry address
+
+    await testContract.setAccessRight(1, 0, 0);  // Action 0: Only owner can access
+ 
     await deployParcelsRolesRegistryFacet(mockERC721.address);
 
     // Mint a token to the owner
@@ -78,6 +89,9 @@ describe("ParcelRolesRegistryFacet", async () => {
       "ParcelRolesRegistryFacet",
       realmDiamondAddress
     );
+
+    await testContract.setRolesRegistryAddress(parcelRolesRegistryFacet.address);
+
     // Approve the facet contract to manage owner's tokens
     await mockERC721
       .connect(owner)
@@ -683,6 +697,66 @@ describe("ParcelRolesRegistryFacet", async () => {
         "ParcelRolesRegistryFacet: sender must be owner or approved"
       );
     });
+  });
+
+  describe("AccessRight", async () => {
+    it("should allow role recipient to access after granting the role", async () => {
+     const role1 = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 1,
+        recipient: grantee.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
+      };
+
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+        .withArgs(
+          role1.tokenAddress,
+          role1.tokenId,
+          role1.roleId,
+          owner.address,
+          role1.recipient,
+          role1.expirationDate,
+          role1.revocable,
+          role1.data
+        );
+
+          await expect(
+            testContract.testVerifyAccessRight(1, 0, 0, role1.recipient)
+          ).to.be.not.reverted;
+
+    });
+
+    it("should revert if user without role or ownership tries to access", async () => {
+      const role1 = {
+         roleId: ROLE_ALCHEMICA_CHANNELING,
+         tokenAddress: mockERC721.address,
+         tokenId: 1,
+         recipient: grantee.address,
+         expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+         revocable: true,
+         data: "0x",
+       };
+ 
+       await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role1))
+         .to.emit(parcelRolesRegistryFacet, "RoleGranted")
+         .withArgs(
+           role1.tokenAddress,
+           role1.tokenId,
+           role1.roleId,
+           owner.address,
+           role1.recipient,
+           role1.expirationDate,
+           role1.revocable,
+           role1.data
+         );
+           await expect(
+             testContract.testVerifyAccessRight(1, 0, 0, anotherUser.address)
+           ).to.be.revertedWith("LibRealm: Access Right - Only Owner");
+     });
   });
 
   describe("setRoleApproval", async () => {

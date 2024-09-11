@@ -118,11 +118,13 @@ struct AppStorage {
   mapping(uint256 => BounceGate) bounceGates;
   // parcelId => action: 0 Alchemical Channeling, 1 Emptying Reservoirs => whitelistIds
   mapping(uint256 => mapping(uint256 => uint32)) whitelistIds;
-    // ERC7432
+  // ERC7432
   mapping(address => mapping(address => mapping(address => bool))) tokenApprovals;
   mapping(address => mapping(uint256 => mapping(bytes32 => RoleData))) erc7432_roles;
   mapping(address => mapping(uint256 => address)) erc7432OriginalOwners;
   mapping(bytes32 => bool) validRoles;
+  mapping(uint256 => bytes32) actionRightToRole;  // Map actionRight index to role ID
+  address parcelRolesRegistryFacetAddress;
 }
 
 library LibAppStorage {

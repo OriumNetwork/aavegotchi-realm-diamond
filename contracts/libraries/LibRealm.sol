@@ -3,6 +3,8 @@ pragma solidity 0.8.9;
 
 import {InstallationDiamondInterface} from "../interfaces/InstallationDiamondInterface.sol";
 import {TileDiamondInterface} from "../interfaces/TileDiamond.sol";
+import {IERC7432} from "../interfaces/IERC7432.sol";
+import {LibAppStorageInstallation, InstallationAppStorage} from "../libraries/AppStorageInstallation.sol";
 import "./AppStorage.sol";
 import "./BinomialRandomizer.sol";
 
@@ -202,9 +204,17 @@ library LibRealm {
   ) internal view {
     AppStorage storage s = LibAppStorage.diamondStorage();
     AavegotchiDiamond diamond = AavegotchiDiamond(s.aavegotchiDiamond);
-
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
+  
     uint256 accessRight = s.accessRights[_realmId][_actionRight];
     address parcelOwner = s.parcels[_realmId].owner;
+
+    IERC7432 rolesRegistry = IERC7432(s.parcelRolesRegistryFacetAddress);
+    address roleRecipient = rolesRegistry.recipientOf(si.realmDiamond, _realmId, s.actionRightToRole[_actionRight]);
+    // if the user has the role, skip accessRight check
+    if (roleRecipient == _sender) {
+        return;  
+    }
 
     //Only owner
     if (accessRight == 0) {
