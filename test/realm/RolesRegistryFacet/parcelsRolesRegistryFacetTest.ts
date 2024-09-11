@@ -701,7 +701,7 @@ describe("ParcelRolesRegistryFacet", async () => {
   });
 
   describe("AccessRight", async () => {
-    it.only("should allow role recipient to access after granting the role", async () => {
+    it("should allow role recipient to access after granting the role", async () => {
      const role1 = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
@@ -731,7 +731,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     });
 
-    it.only("should revert if user without role or ownership tries to access", async () => {
+    it("should revert if user without role or ownership tries to access", async () => {
       const role1 = {
          roleId: ROLE_ALCHEMICA_CHANNELING,
          tokenAddress: mockERC721.address,

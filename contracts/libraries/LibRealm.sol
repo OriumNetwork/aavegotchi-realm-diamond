@@ -210,9 +210,8 @@ library LibRealm {
     address parcelOwner = s.parcels[_realmId].owner;
 
     IERC7432 rolesRegistry = IERC7432(s.parcelRolesRegistryFacetAddress);
-
     address roleRecipient = rolesRegistry.recipientOf(si.realmDiamond, _realmId, s.actionRightToRole[_actionRight]);
-
+    // if the user has the role, skip accessRight check
     if (roleRecipient == _sender) {
         return;  
     }
