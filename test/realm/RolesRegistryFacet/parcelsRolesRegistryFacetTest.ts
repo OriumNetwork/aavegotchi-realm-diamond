@@ -76,7 +76,6 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     await testContract.setAccessRight(1, 0, 0);  // Action 0: Only owner can access
  
-
     await deployParcelsRolesRegistryFacet(mockERC721.address);
 
     // Mint a token to the owner
