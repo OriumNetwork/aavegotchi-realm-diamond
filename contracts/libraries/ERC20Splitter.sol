@@ -5,10 +5,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract ERC20Splitter is ReentrancyGuard {
-  // Mapping to track balances of token by address and recipient
-  mapping(address => mapping(address => uint256)) public _balances;
 
-  // Mapping to track which tokens a user has received (for auto-withdrawals)
+  mapping(address => mapping(address => uint256)) public balances;
   mapping(address => address[]) private _userTokens;
   mapping(address => mapping(address => bool)) private _hasToken;
 
@@ -50,10 +48,10 @@ contract ERC20Splitter is ReentrancyGuard {
 
     for (uint256 i = 0; i < userTokens.length; i++) {
       address tokenAddress = userTokens[i];
-      uint256 amount = _balances[tokenAddress][msg.sender];
+      uint256 amount = balances[tokenAddress][msg.sender];
 
       if (amount > 0) {
-        _balances[tokenAddress][msg.sender] = 0;
+        balances[tokenAddress][msg.sender] = 0;
 
         if (tokenAddress == address(0)) {
           payable(msg.sender).transfer(amount);
@@ -99,7 +97,7 @@ contract ERC20Splitter is ReentrancyGuard {
     // Distribute the tokens based on shares
     for (uint256 i = 0; i < recipients.length; i++) {
       uint256 recipientAmount = (amount * shares[i]) / MAX_SHARES;
-      _balances[tokenAddress][recipients[i]] += recipientAmount;
+      balances[tokenAddress][recipients[i]] += recipientAmount;
 
       _addTokenForUser(recipients[i], tokenAddress);
     }

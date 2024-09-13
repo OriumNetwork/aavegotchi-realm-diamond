@@ -63,13 +63,13 @@ describe("ERC20Splitter", () => {
 
         // Check balances
         expect(
-          await splitter._balances(mockERC20.address, recipient1.address)
+          await splitter.balances(mockERC20.address, recipient1.address)
         ).to.equal(ethers.utils.parseEther("50"));
         expect(
-          await splitter._balances(mockERC20.address, recipient2.address)
+          await splitter.balances(mockERC20.address, recipient2.address)
         ).to.equal(ethers.utils.parseEther("30"));
         expect(
-          await splitter._balances(mockERC20.address, recipient3.address)
+          await splitter.balances(mockERC20.address, recipient3.address)
         ).to.equal(ethers.utils.parseEther("20"));
       });
 
@@ -89,13 +89,13 @@ describe("ERC20Splitter", () => {
 
         // Check balances
         expect(
-          await splitter._balances(AddressZero, recipient1.address)
+          await splitter.balances(AddressZero, recipient1.address)
         ).to.equal(ethers.utils.parseEther("0.5"));
         expect(
-          await splitter._balances(AddressZero, recipient2.address)
+          await splitter.balances(AddressZero, recipient2.address)
         ).to.equal(ethers.utils.parseEther("0.3"));
         expect(
-          await splitter._balances(AddressZero, recipient3.address)
+          await splitter.balances(AddressZero, recipient3.address)
         ).to.equal(ethers.utils.parseEther("0.2"));
       });
 
@@ -160,7 +160,7 @@ describe("ERC20Splitter", () => {
           );
 
         expect(
-          await splitter._balances(mockERC20.address, recipient1.address)
+          await splitter.balances(mockERC20.address, recipient1.address)
         ).to.equal(0);
       });
 
@@ -188,10 +188,10 @@ describe("ERC20Splitter", () => {
 
         // Check that the balances are updated correctly
         expect(
-          await splitter._balances(AddressZero, recipient1.address)
+          await splitter.balances(AddressZero, recipient1.address)
         ).to.equal(0);
         expect(
-          await splitter._balances(mockERC20.address, recipient1.address)
+          await splitter.balances(mockERC20.address, recipient1.address)
         ).to.equal(0);
       });
     });
@@ -219,7 +219,7 @@ describe("ERC20Splitter", () => {
           );
 
         expect(
-          await splitter._balances(mockERC20.address, recipient1.address)
+          await splitter.balances(mockERC20.address, recipient1.address)
         ).to.equal(0);
       });
 
@@ -247,10 +247,10 @@ describe("ERC20Splitter", () => {
 
         // Check that the balances are updated correctly
         expect(
-          await splitter._balances(AddressZero, recipient1.address)
+          await splitter.balances(AddressZero, recipient1.address)
         ).to.equal(0);
         expect(
-          await splitter._balances(mockERC20.address, recipient1.address)
+          await splitter.balances(mockERC20.address, recipient1.address)
         ).to.equal(0);
       });
     });
@@ -282,7 +282,7 @@ describe("ERC20Splitter", () => {
 
         // Check that the balance is updated correctly
         expect(
-          await splitter._balances(AddressZero, recipient1.address)
+          await splitter.balances(AddressZero, recipient1.address)
         ).to.equal(0);
       });
     });
@@ -327,7 +327,7 @@ describe("ERC20Splitter", () => {
 
         // Check that the balance for ETH is updated correctly
         expect(
-          await splitter._balances(AddressZero, recipient1.address)
+          await splitter.balances(AddressZero, recipient1.address)
         ).to.equal(0);
 
         // recipient2 withdraws their ERC-20 tokens
@@ -341,7 +341,7 @@ describe("ERC20Splitter", () => {
 
         // Check that the balance for ERC-20 is updated correctly for recipient2
         expect(
-          await splitter._balances(mockERC20.address, recipient2.address)
+          await splitter.balances(mockERC20.address, recipient2.address)
         ).to.equal(0);
 
         // recipient3 withdraws their ERC-20 tokens
@@ -355,7 +355,7 @@ describe("ERC20Splitter", () => {
 
         // Check that the balance for ERC-20 is updated correctly for recipient3
         expect(
-          await splitter._balances(mockERC20.address, recipient3.address)
+          await splitter.balances(mockERC20.address, recipient3.address)
         ).to.equal(0);
       });
     });
