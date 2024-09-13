@@ -2,17 +2,20 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract ERC20Splitter {
+contract ERC20Splitter is ReentrancyGuard {
   // Mapping to track balances of token by address and recipient
-  mapping(address => mapping(address => uint256)) private _balances;
+  mapping(address => mapping(address => uint256)) public _balances;
 
   // Mapping to track which tokens a user has received (for auto-withdrawals)
   mapping(address => address[]) private _userTokens;
   mapping(address => mapping(address => bool)) private _hasToken;
 
   event Deposit(address indexed depositor, address[] tokenAddresses, uint256[] amounts, uint256[][] shares, address[][] recipients);
-  event Withdraw(address indexed recipient, address tokenAddress, uint256 amount);
+  event Withdraw(address indexed user, address[] tokenAddresses, uint256[] amounts);
+
+  uint256 public constant MAX_SHARES = 10000;
 
   /// @notice Deposits ERC20 or native tokens and splits between recipients based on shares.
   /// @param tokenAddresses Array of token addresses (use address(0) for native tokens).
@@ -37,10 +40,13 @@ contract ERC20Splitter {
 
   /// @notice Withdraw all tokens that the caller is entitled to.
   /// Tokens are automatically determined based on previous deposits.
-  function withdraw() external {
+  function withdraw() external nonReentrant {
     address[] storage userTokens = _userTokens[msg.sender];
-
     require(userTokens.length > 0, "No tokens to withdraw");
+
+    // Store token addresses and amounts for the event
+    address[] memory withdrawnTokens = new address[](userTokens.length);
+    uint256[] memory withdrawnAmounts = new uint256[](userTokens.length);
 
     for (uint256 i = 0; i < userTokens.length; i++) {
       address tokenAddress = userTokens[i];
@@ -55,10 +61,16 @@ contract ERC20Splitter {
           require(IERC20(tokenAddress).transfer(msg.sender, amount), "Transfer failed");
         }
 
-        emit Withdraw(msg.sender, tokenAddress, amount);
+        withdrawnTokens[i] = tokenAddress;
+        withdrawnAmounts[i] = amount;
       }
+
+      delete _hasToken[msg.sender][tokenAddress];
     }
-    _clearUserTokens(msg.sender);
+
+    delete _userTokens[msg.sender];
+
+    emit Withdraw(msg.sender, withdrawnTokens, withdrawnAmounts);
   }
 
   /// @notice Internal function to split the tokens among recipients.
@@ -76,22 +88,19 @@ contract ERC20Splitter {
       totalSharePercentage += shares[i];
     }
 
-    require(totalSharePercentage == 10000, "Shares must sum to 100%");
+    require(totalSharePercentage == MAX_SHARES, "Shares must sum to 100%");
 
     if (tokenAddress == address(0)) {
-      // Handle native token (ETH)
       require(msg.value == amount, "Incorrect native token amount sent");
     } else {
-      // Handle ERC-20 token
       require(IERC20(tokenAddress).transferFrom(msg.sender, address(this), amount), "Transfer failed");
     }
 
     // Distribute the tokens based on shares
     for (uint256 i = 0; i < recipients.length; i++) {
-      uint256 recipientAmount = (amount * shares[i]) / 10000;
+      uint256 recipientAmount = (amount * shares[i]) / MAX_SHARES;
       _balances[tokenAddress][recipients[i]] += recipientAmount;
 
-      // Track the token for this recipient (if it's the first time they receive this token)
       _addTokenForUser(recipients[i], tokenAddress);
     }
   }
@@ -105,27 +114,4 @@ contract ERC20Splitter {
       _hasToken[recipient][tokenAddress] = true;
     }
   }
-
-  /// @notice View function to check token balances for an account.
-  /// @param tokenAddress The address of the token.
-  /// @param account The address of the account to check balance for.
-  /// @return The balance of the specified token for the given account.
-  function balances(address tokenAddress, address account) external view returns (uint256) {
-    return _balances[tokenAddress][account];
-  }
-
-  function _clearUserTokens(address user) internal {
-    address[] storage tokens = _userTokens[user];
-
-    // Clear the _hasToken mapping for each token
-    for (uint256 i = 0; i < tokens.length; i++) {
-      _hasToken[user][tokens[i]] = false;
-    }
-
-    // Clear the _userTokens array
-    delete _userTokens[user];
-  }
-
-  // Fallback and receive functions to handle native token deposits
-  receive() external payable {}
 }
