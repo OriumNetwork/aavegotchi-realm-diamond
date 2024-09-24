@@ -71,6 +71,10 @@ struct RoleData {
   uint64 expirationDate;
   bool revocable;
   bytes data;
+  address[] tokenAddresses;
+  uint256[] amounts;
+  uint16[][] shares;
+  address[][] recipients;
 }
 
 struct AppStorage {

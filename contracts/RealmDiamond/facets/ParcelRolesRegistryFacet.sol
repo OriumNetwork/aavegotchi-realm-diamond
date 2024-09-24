@@ -30,16 +30,22 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   function grantRole(Role calldata _role) external override onlyValidRole(_role.roleId) onlyRealm(_role.tokenAddress) {
     require(_role.expirationDate > block.timestamp, "ParcelRolesRegistryFacet: expiration date must be in the future");
 
-    // Deposit NFT if necessary and get the original owner
     address _originalOwner = _depositNft(_role.tokenAddress, _role.tokenId);
 
-    // Get role data from storage
     RoleData storage _roleData = s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId];
 
-    // Check if the role is either revocable or expired
     require(_roleData.revocable || _roleData.expirationDate < block.timestamp, "ParcelRolesRegistryFacet: role must be expired or revocable");
 
-    s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId] = RoleData(_role.recipient, _role.expirationDate, _role.revocable, _role.data);
+    if (_role.data.length > 0) {
+      if (_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()")) {
+        _handleProfitShareData(_role.tokenAddress, _role.tokenId, _role.roleId, _role.data);
+      }
+    }
+
+    _roleData.recipient = _role.recipient;
+    _roleData.expirationDate = _role.expirationDate;
+    _roleData.revocable = _role.revocable;
+    _roleData.data = _role.data;
 
     emit RoleGranted(
       _role.tokenAddress,
@@ -116,7 +122,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     if (_roleData.recipient == address(0)) {
       return false;
     }
-    
+
     return (_roleData.expirationDate < block.timestamp || !_roleData.revocable);
   }
 
@@ -206,6 +212,66 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
       return originalOwner;
     }
     revert("ParcelRolesRegistryFacet: sender is not approved");
+  }
+
+  /// @notice Decodes the profit share data from the provided calldata.
+  /// @param data The encoded profit share data.
+  /// @return tokenAddresses The array of token addresses involved in the profit share.
+  /// @return amounts The array of amounts corresponding to the token addresses.
+  /// @return shares The 2D array representing shares of each recipient.
+  /// @return recipients The 2D array representing the recipient addresses for each token.
+  function _decodeProfitShare(
+    bytes calldata data
+  ) internal pure returns (address[] memory tokenAddresses, uint256[] memory amounts, uint16[][] memory shares, address[][] memory recipients) {
+    (tokenAddresses, amounts, shares, recipients) = abi.decode(data, (address[], uint256[], uint16[][], address[][]));
+
+    require(tokenAddresses.length == amounts.length, "Mismatched tokenAddresses and amounts length");
+    require(tokenAddresses.length == shares.length, "Mismatched tokenAddresses and shares length");
+    require(tokenAddresses.length == recipients.length, "Mismatched tokenAddresses and recipients length");
+
+    return (tokenAddresses, amounts, shares, recipients);
+  }
+
+  /// @notice Validates that the provided profit shares sum up to 100% (10000 basis points).
+  /// @param shares The array of profit share values in basis points.
+  /// @return Whether the total shares sum to 10000 (i.e., 100%).
+  function _validateProfitShare(uint16[] memory shares) internal pure returns (bool) {
+    uint256 total = 0;
+    uint256 len = shares.length;
+    for (uint256 i = 0; i < len; ) {
+      total += shares[i];
+      unchecked {
+        i++;
+      }
+    }
+    return total == 10000;
+  }
+
+  /// @notice Handles the profit share data by decoding it and storing it in the contract's storage.
+  /// @param _tokenAddress The address of the token involved in the role.
+  /// @param _tokenId The identifier of the token.
+  /// @param _roleId The role identifier related to the profit share.
+  /// @param data The encoded profit share data to be decoded and stored.
+  function _handleProfitShareData(address _tokenAddress, uint256 _tokenId, bytes32 _roleId, bytes calldata data) internal {
+    (address[] memory tokenAddresses, uint256[] memory amounts, uint16[][] memory shares, address[][] memory recipients) = abi.decode(
+      data,
+      (address[], uint256[], uint16[][], address[][])
+    );
+
+    require(
+      tokenAddresses.length == amounts.length && tokenAddresses.length == shares.length && tokenAddresses.length == recipients.length,
+      "ParcelRolesRegistryFacet: Invalid profit share data format"
+    );
+
+    for (uint256 i = 0; i < shares.length; i++) {
+      require(_validateProfitShare(shares[i]), "ParcelRolesRegistryFacet: Shares must sum to 10000");
+    }
+
+    RoleData storage decodedRoleData = s.erc7432_roles[_tokenAddress][_tokenId][_roleId];
+    decodedRoleData.tokenAddresses = tokenAddresses;
+    decodedRoleData.amounts = amounts;
+    decodedRoleData.shares = shares;
+    decodedRoleData.recipients = recipients;
   }
 
   function supportsInterface(bytes4 interfaceId) external view virtual override returns (bool) {
