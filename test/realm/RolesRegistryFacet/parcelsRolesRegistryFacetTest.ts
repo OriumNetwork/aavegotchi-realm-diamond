@@ -549,11 +549,11 @@ describe("ParcelRolesRegistryFacet", async () => {
       ]);
     });
 
-    it("should store the correct profit share data for multiple tokens", async () => {
+    it("should store the correct profit share data for multiple tokens with different owner and borrower shares", async () => {
       const profitTokens = [mockERC20.address, ethers.constants.AddressZero];
       const sharesArray = [
         [3000, 4000, 1500, 1500],
-        [3000, 4000, 1500, 1500],
+        [4000, 3000, 1500, 1500],
       ];
       const recipientsArray = [
         [recipient1.address, recipient2.address],
@@ -590,7 +590,6 @@ describe("ParcelRolesRegistryFacet", async () => {
           roleWithProfitShare.data
         );
 
-      // Retrieve and validate profit share data
       const [
         storedOwnerShare,
         storedBorrowerShare,
@@ -603,11 +602,46 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleWithProfitShare.roleId
       );
 
-      expect(storedOwnerShare).to.equal(3000);
-      expect(storedBorrowerShare).to.equal(4000);
-      expect(storedTokenAddresses).to.deep.equal(profitTokens);
-      expect(storedSharesArray).to.deep.equal(sharesArray);
-      expect(storedRecipientsArray).to.deep.equal(recipientsArray);
+      expect(storedTokenAddresses.length).to.equal(2);
+      expect(storedTokenAddresses).to.deep.equal([
+        mockERC20.address,
+        ethers.constants.AddressZero,
+      ]);
+
+      expect(storedSharesArray.length).to.equal(2);
+
+      expect(storedRecipientsArray.length).to.equal(2);
+
+      for (let i = 0; i < storedSharesArray.length; i++) {
+        const [ownerShare, borrowerShare, ...recipientShares] =
+          storedSharesArray[i];
+
+        const expectedOwnerShare = i === 0 ? 3000 : 4000;
+        const expectedBorrowerShare = i === 0 ? 4000 : 3000;
+
+        expect(ownerShare).to.equal(expectedOwnerShare);
+        expect(borrowerShare).to.equal(expectedBorrowerShare);
+
+        const remainingShare = 10000 - ownerShare - borrowerShare;
+
+        const totalRecipientShares = recipientShares.reduce((a, b) => a + b, 0);
+
+        expect(totalRecipientShares).to.equal(
+          remainingShare,
+          `Total recipient shares for token ${
+            i + 1
+          } should equal remaining share (${remainingShare})`
+        );
+      }
+
+      expect(storedRecipientsArray[0]).to.deep.equal([
+        recipient1.address,
+        recipient2.address,
+      ]);
+      expect(storedRecipientsArray[1]).to.deep.equal([
+        recipient3.address,
+        recipient4.address,
+      ]);
     });
 
     it("should allow empty data for non-profit-share roles", async () => {

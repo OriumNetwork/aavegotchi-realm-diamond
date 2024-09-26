@@ -262,17 +262,11 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     uint16 ownerShare = sharesArray[0][0];
     uint16 borrowerShare = sharesArray[0][1];
 
-    for (uint256 i = 1; i < sharesArray.length; i++) {
-      require(sharesArray[i][0] == ownerShare, "ParcelRolesRegistryFacet: Inconsistent ownerShare across tokens");
-      require(sharesArray[i][1] == borrowerShare, "ParcelRolesRegistryFacet: Inconsistent borrowerShare across tokens");
-    }
-
     // Validate shares for each token
     for (uint256 i = 0; i < profitTokens.length; i++) {
       _validateShares(sharesArray[i], ownerShare, borrowerShare);
     }
 
-    // Store all profit share data in a single ProfitShare struct
     ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
 
     profitShare.ownerShare = ownerShare;
@@ -296,9 +290,6 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
       totalRecipientShares += shares[j];
     }
     require(totalRecipientShares == remainingShare, "ParcelRolesRegistryFacet: Recipient shares do not match the remaining share");
-
-    uint16 totalShares = ownerShare + borrowerShare + totalRecipientShares;
-    require(totalShares == 10000, "ParcelRolesRegistryFacet: Total shares must sum to 10000");
   }
 
   function supportsInterface(bytes4 interfaceId) external view virtual override returns (bool) {
