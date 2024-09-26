@@ -255,27 +255,31 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   function _handleProfitShareData(address _tokenAddress, uint256 _tokenId, bytes32 _roleId, bytes calldata data) internal {
     (address[] memory profitTokens, uint16[][] memory sharesArray, address[][] memory recipientsArray) = _decodeProfitShare(data);
 
-    require(profitTokens.length > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
-    require(sharesArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
-    require(recipientsArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
+    uint256 tokenCount = profitTokens.length;
 
-    ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
+    require(tokenCount > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
+    require(sharesArray.length == tokenCount && recipientsArray.length == tokenCount, "ParcelRolesRegistryFacet: Array length mismatch");
 
-    profitShare.ownerShare = new uint16[](profitTokens.length);
-    profitShare.borrowerShare = new uint16[](profitTokens.length);
-    profitShare.tokenAddresses = profitTokens;
-    profitShare.shares = sharesArray;
-    profitShare.recipients = recipientsArray;
+    uint16[] memory ownerShares = new uint16[](tokenCount);
+    uint16[] memory borrowerShares = new uint16[](tokenCount);
 
-    for (uint256 i = 0; i < profitTokens.length; i++) {
+    for (uint256 i = 0; i < tokenCount; i++) {
       uint16 ownerShare = sharesArray[i][0];
       uint16 borrowerShare = sharesArray[i][1];
 
       _validateShares(sharesArray[i], ownerShare, borrowerShare);
 
-      profitShare.ownerShare[i] = ownerShare;
-      profitShare.borrowerShare[i] = borrowerShare;
+      ownerShares[i] = ownerShare;
+      borrowerShares[i] = borrowerShare;
     }
+
+    ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
+
+    profitShare.ownerShare = ownerShares;
+    profitShare.borrowerShare = borrowerShares;
+    profitShare.tokenAddresses = profitTokens;
+    profitShare.shares = sharesArray;
+    profitShare.recipients = recipientsArray;
   }
 
   /// @notice Validates the shares for a single token.
