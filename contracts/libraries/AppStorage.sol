@@ -74,8 +74,8 @@ struct RoleData {
 }
 
 struct ProfitShare {
-  uint16 ownerShare;
-  uint16 borrowerShare;
+  uint16[] ownerShare;
+  uint16[] borrowerShare;
   address[] tokenAddresses;
   uint16[][] shares;
   address[][] recipients;

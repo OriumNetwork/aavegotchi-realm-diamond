@@ -36,16 +36,16 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
     require(_roleData.revocable || _roleData.expirationDate < block.timestamp, "ParcelRolesRegistryFacet: role must be expired or revocable");
 
-    _roleData.recipient = _role.recipient;
-    _roleData.expirationDate = _role.expirationDate;
-    _roleData.revocable = _role.revocable;
-    _roleData.data = _role.data;
-
     if ((_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()"))) {
       if (_role.data.length > 0) {
         _handleProfitShareData(_role.tokenAddress, _role.tokenId, _role.roleId, _role.data);
       }
     }
+
+    _roleData.recipient = _role.recipient;
+    _roleData.expirationDate = _role.expirationDate;
+    _roleData.revocable = _role.revocable;
+    _roleData.data = _role.data;
 
     emit RoleGranted(
       _role.tokenAddress,
@@ -176,8 +176,8 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     external
     view
     returns (
-      uint16 ownerShare,
-      uint16 borrowerShare,
+      uint16[] memory ownerShares,
+      uint16[] memory borrowerShares,
       address[] memory tokenAddresses,
       uint16[][] memory sharesArray,
       address[][] memory recipientsArray
@@ -259,27 +259,29 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     require(sharesArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
     require(recipientsArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
 
-    uint16 ownerShare = sharesArray[0][0];
-    uint16 borrowerShare = sharesArray[0][1];
-
-    // Validate shares for each token
-    for (uint256 i = 0; i < profitTokens.length; i++) {
-      _validateShares(sharesArray[i], ownerShare, borrowerShare);
-    }
-
     ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
 
-    profitShare.ownerShare = ownerShare;
-    profitShare.borrowerShare = borrowerShare;
+    profitShare.ownerShare = new uint16[](profitTokens.length);
+    profitShare.borrowerShare = new uint16[](profitTokens.length);
     profitShare.tokenAddresses = profitTokens;
     profitShare.shares = sharesArray;
     profitShare.recipients = recipientsArray;
+
+    for (uint256 i = 0; i < profitTokens.length; i++) {
+      uint16 ownerShare = sharesArray[i][0];
+      uint16 borrowerShare = sharesArray[i][1];
+
+      _validateShares(sharesArray[i], ownerShare, borrowerShare);
+
+      profitShare.ownerShare[i] = ownerShare;
+      profitShare.borrowerShare[i] = borrowerShare;
+    }
   }
 
   /// @notice Validates the shares for a single token.
   /// @param shares The shares array for the token.
   /// @param ownerShare The global owner share.
-  /// @param borrowerShare The global borrower share.
+  /// @param borrowerShare The global borrower share.a
   function _validateShares(uint16[] memory shares, uint16 ownerShare, uint16 borrowerShare) internal pure {
     require(shares.length >= 2, "ParcelRolesRegistryFacet: Each shares array must have at least owner and borrower shares");
 
