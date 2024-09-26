@@ -4,7 +4,7 @@ pragma solidity 0.8.9;
 import {IERC7432} from "../../interfaces/IERC7432.sol";
 import {IERC721} from "../../interfaces/IERC721.sol";
 
-import {Modifiers, RoleData} from "../../libraries/AppStorage.sol";
+import {Modifiers, RoleData, ProfitShare} from "../../libraries/AppStorage.sol";
 
 import {LibAppStorageInstallation, InstallationAppStorage} from "../../libraries/AppStorageInstallation.sol";
 
@@ -36,16 +36,16 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
     require(_roleData.revocable || _roleData.expirationDate < block.timestamp, "ParcelRolesRegistryFacet: role must be expired or revocable");
 
-    if (_role.data.length > 0) {
-      if (_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()")) {
-        _handleProfitShareData(_role.tokenAddress, _role.tokenId, _role.roleId, _role.data);
-      }
-    }
-
     _roleData.recipient = _role.recipient;
     _roleData.expirationDate = _role.expirationDate;
     _roleData.revocable = _role.revocable;
     _roleData.data = _role.data;
+
+    if ((_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()"))) {
+      if (_role.data.length > 0) {
+        _handleProfitShareData(_role.tokenAddress, _role.tokenId, _role.roleId, _role.data);
+      }
+    }
 
     emit RoleGranted(
       _role.tokenAddress,
@@ -168,6 +168,25 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
       s.erc7432_roles[_tokenAddress][_tokenId][_roleId].revocable;
   }
 
+  function getProfitShare(
+    address _tokenAddress,
+    uint256 _tokenId,
+    bytes32 _roleId
+  )
+    external
+    view
+    returns (
+      uint16 ownerShare,
+      uint16 borrowerShare,
+      address[] memory tokenAddresses,
+      uint16[][] memory sharesArray,
+      address[][] memory recipientsArray
+    )
+  {
+    ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
+    return (profitShare.ownerShare, profitShare.borrowerShare, profitShare.tokenAddresses, profitShare.shares, profitShare.recipients);
+  }
+
   /** Internal Functions **/
 
   /// @notice Updates originalOwner, validates the sender and deposits NFT (if not deposited yet).
@@ -178,14 +197,12 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     address _currentOwner = IERC721(_tokenAddress).ownerOf(_tokenId);
     address _sender = LibMeta.msgSender();
     if (_currentOwner == address(this)) {
-      // if the NFT is already on the contract, check if sender is approved or original owner
       originalOwner_ = s.erc7432OriginalOwners[_tokenAddress][_tokenId];
       require(
         originalOwner_ == _sender || isRoleApprovedForAll(_tokenAddress, originalOwner_, _sender),
         "ParcelRolesRegistryFacet: sender must be owner or approved"
       );
     } else {
-      // if NFT is not in the contract, deposit it and store the original owner
       require(
         _currentOwner == _sender || isRoleApprovedForAll(_tokenAddress, _currentOwner, _sender),
         "ParcelRolesRegistryFacet: sender must be owner or approved"
@@ -217,34 +234,17 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @notice Decodes the profit share data from the provided calldata.
   /// @param data The encoded profit share data.
   /// @return tokenAddresses The array of token addresses involved in the profit share.
-  /// @return amounts The array of amounts corresponding to the token addresses.
   /// @return shares The 2D array representing shares of each recipient.
   /// @return recipients The 2D array representing the recipient addresses for each token.
   function _decodeProfitShare(
     bytes calldata data
-  ) internal pure returns (address[] memory tokenAddresses, uint256[] memory amounts, uint16[][] memory shares, address[][] memory recipients) {
-    (tokenAddresses, amounts, shares, recipients) = abi.decode(data, (address[], uint256[], uint16[][], address[][]));
+  ) internal pure returns (address[] memory tokenAddresses, uint16[][] memory shares, address[][] memory recipients) {
+    (tokenAddresses, shares, recipients) = abi.decode(data, (address[], uint16[][], address[][]));
 
-    require(tokenAddresses.length == amounts.length, "Mismatched tokenAddresses and amounts length");
     require(tokenAddresses.length == shares.length, "Mismatched tokenAddresses and shares length");
     require(tokenAddresses.length == recipients.length, "Mismatched tokenAddresses and recipients length");
 
-    return (tokenAddresses, amounts, shares, recipients);
-  }
-
-  /// @notice Validates that the provided profit shares sum up to 100% (10000 basis points).
-  /// @param shares The array of profit share values in basis points.
-  /// @return Whether the total shares sum to 10000 (i.e., 100%).
-  function _validateProfitShare(uint16[] memory shares) internal pure returns (bool) {
-    uint256 total = 0;
-    uint256 len = shares.length;
-    for (uint256 i = 0; i < len; ) {
-      total += shares[i];
-      unchecked {
-        i++;
-      }
-    }
-    return total == 10000;
+    return (tokenAddresses, shares, recipients);
   }
 
   /// @notice Handles the profit share data by decoding it and storing it in the contract's storage.
@@ -253,25 +253,52 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @param _roleId The role identifier related to the profit share.
   /// @param data The encoded profit share data to be decoded and stored.
   function _handleProfitShareData(address _tokenAddress, uint256 _tokenId, bytes32 _roleId, bytes calldata data) internal {
-    (address[] memory tokenAddresses, uint256[] memory amounts, uint16[][] memory shares, address[][] memory recipients) = abi.decode(
-      data,
-      (address[], uint256[], uint16[][], address[][])
-    );
+    (address[] memory profitTokens, uint16[][] memory sharesArray, address[][] memory recipientsArray) = _decodeProfitShare(data);
 
-    require(
-      tokenAddresses.length == amounts.length && tokenAddresses.length == shares.length && tokenAddresses.length == recipients.length,
-      "ParcelRolesRegistryFacet: Invalid profit share data format"
-    );
+    require(profitTokens.length > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
+    require(sharesArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
+    require(recipientsArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
 
-    for (uint256 i = 0; i < shares.length; i++) {
-      require(_validateProfitShare(shares[i]), "ParcelRolesRegistryFacet: Shares must sum to 10000");
+    uint16 ownerShare = sharesArray[0][0];
+    uint16 borrowerShare = sharesArray[0][1];
+
+    for (uint256 i = 1; i < sharesArray.length; i++) {
+      require(sharesArray[i][0] == ownerShare, "ParcelRolesRegistryFacet: Inconsistent ownerShare across tokens");
+      require(sharesArray[i][1] == borrowerShare, "ParcelRolesRegistryFacet: Inconsistent borrowerShare across tokens");
     }
 
-    RoleData storage decodedRoleData = s.erc7432_roles[_tokenAddress][_tokenId][_roleId];
-    decodedRoleData.tokenAddresses = tokenAddresses;
-    decodedRoleData.amounts = amounts;
-    decodedRoleData.shares = shares;
-    decodedRoleData.recipients = recipients;
+    // Validate shares for each token
+    for (uint256 i = 0; i < profitTokens.length; i++) {
+      _validateShares(sharesArray[i], ownerShare, borrowerShare);
+    }
+
+    // Store all profit share data in a single ProfitShare struct
+    ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
+
+    profitShare.ownerShare = ownerShare;
+    profitShare.borrowerShare = borrowerShare;
+    profitShare.tokenAddresses = profitTokens;
+    profitShare.shares = sharesArray;
+    profitShare.recipients = recipientsArray;
+  }
+
+  /// @notice Validates the shares for a single token.
+  /// @param shares The shares array for the token.
+  /// @param ownerShare The global owner share.
+  /// @param borrowerShare The global borrower share.
+  function _validateShares(uint16[] memory shares, uint16 ownerShare, uint16 borrowerShare) internal pure {
+    require(shares.length >= 2, "ParcelRolesRegistryFacet: Each shares array must have at least owner and borrower shares");
+
+    uint16 remainingShare = 10000 - ownerShare - borrowerShare;
+
+    uint16 totalRecipientShares = 0;
+    for (uint256 j = 2; j < shares.length; j++) {
+      totalRecipientShares += shares[j];
+    }
+    require(totalRecipientShares == remainingShare, "ParcelRolesRegistryFacet: Recipient shares do not match the remaining share");
+
+    uint16 totalShares = ownerShare + borrowerShare + totalRecipientShares;
+    require(totalShares == 10000, "ParcelRolesRegistryFacet: Total shares must sum to 10000");
   }
 
   function supportsInterface(bytes4 interfaceId) external view virtual override returns (bool) {

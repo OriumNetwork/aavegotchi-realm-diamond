@@ -71,8 +71,12 @@ struct RoleData {
   uint64 expirationDate;
   bool revocable;
   bytes data;
+}
+
+struct ProfitShare {
+  uint16 ownerShare;
+  uint16 borrowerShare;
   address[] tokenAddresses;
-  uint256[] amounts;
   uint16[][] shares;
   address[][] recipients;
 }
@@ -127,7 +131,8 @@ struct AppStorage {
   mapping(address => mapping(uint256 => mapping(bytes32 => RoleData))) erc7432_roles;
   mapping(address => mapping(uint256 => address)) erc7432OriginalOwners;
   mapping(bytes32 => bool) validRoles;
-  mapping(uint256 => bytes32) actionRightToRole;  // Map actionRight index to role ID
+  mapping(uint256 => bytes32) actionRightToRole;
+  mapping(address => mapping(uint256 => mapping(bytes32 => ProfitShare))) profitShares;
   address parcelRolesRegistryFacetAddress;
 }
 
