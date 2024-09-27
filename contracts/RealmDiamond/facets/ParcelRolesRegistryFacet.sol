@@ -36,38 +36,35 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
     require(_roleData.revocable || _roleData.expirationDate < block.timestamp, "ParcelRolesRegistryFacet: role must be expired or revocable");
 
-    _roleData.recipient = _role.recipient;
-    _roleData.expirationDate = _role.expirationDate;
-    _roleData.revocable = _role.revocable;
-    _roleData.data = _role.data;
+    s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId] = RoleData(_role.recipient, _role.expirationDate, _role.revocable, _role.data);
 
     if (_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()")) {
-      if (_role.data.length > 0) {
-        (
-          address[] memory profitTokens,
-          uint16[] memory ownerShares,
-          uint16[] memory borrowerShares,
-          uint16[][] memory sharesArray,
-          address[][] memory recipientsArray
-        ) = _decodeProfitShare(_role.data);
+      require(_role.data.length > 0, "ParcelRolesRegistryFacet: No informations provided in ProfitShare");
 
-        require(profitTokens.length > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
-        require(ownerShares.length == profitTokens.length, "ParcelRolesRegistryFacet: Mismatched ownerShares length");
-        require(borrowerShares.length == profitTokens.length, "ParcelRolesRegistryFacet: Mismatched borrowerShares length");
-        require(sharesArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
-        require(recipientsArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
+      (
+        address[] memory profitTokens,
+        uint16[] memory ownerShares,
+        uint16[] memory borrowerShares,
+        uint16[][] memory sharesArray,
+        address[][] memory recipientsArray
+      ) = _decodeProfitShare(_role.data);
 
-        _handleProfitShareData(
-          _role.tokenAddress,
-          _role.tokenId,
-          _role.roleId,
-          profitTokens,
-          ownerShares,
-          borrowerShares,
-          sharesArray,
-          recipientsArray
-        );
-      }
+      require(profitTokens.length > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
+      require(ownerShares.length == profitTokens.length, "ParcelRolesRegistryFacet: Mismatched ownerShares length");
+      require(borrowerShares.length == profitTokens.length, "ParcelRolesRegistryFacet: Mismatched borrowerShares length");
+      require(sharesArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
+      require(recipientsArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
+
+      _handleProfitShareData(
+        _role.tokenAddress,
+        _role.tokenId,
+        _role.roleId,
+        profitTokens,
+        ownerShares,
+        borrowerShares,
+        sharesArray,
+        recipientsArray
+      );
     }
 
     emit RoleGranted(
