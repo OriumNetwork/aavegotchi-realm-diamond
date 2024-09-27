@@ -36,16 +36,39 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
     require(_roleData.revocable || _roleData.expirationDate < block.timestamp, "ParcelRolesRegistryFacet: role must be expired or revocable");
 
-    if ((_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()"))) {
-      if (_role.data.length > 0) {
-        _handleProfitShareData(_role.tokenAddress, _role.tokenId, _role.roleId, _role.data);
-      }
-    }
-
     _roleData.recipient = _role.recipient;
     _roleData.expirationDate = _role.expirationDate;
     _roleData.revocable = _role.revocable;
     _roleData.data = _role.data;
+
+    if (_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()")) {
+      if (_role.data.length > 0) {
+        (
+          address[] memory profitTokens,
+          uint16[] memory ownerShares,
+          uint16[] memory borrowerShares,
+          uint16[][] memory sharesArray,
+          address[][] memory recipientsArray
+        ) = _decodeProfitShare(_role.data);
+
+        require(profitTokens.length > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
+        require(ownerShares.length == profitTokens.length, "ParcelRolesRegistryFacet: Mismatched ownerShares length");
+        require(borrowerShares.length == profitTokens.length, "ParcelRolesRegistryFacet: Mismatched borrowerShares length");
+        require(sharesArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
+        require(recipientsArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
+
+        _handleProfitShareData(
+          _role.tokenAddress,
+          _role.tokenId,
+          _role.roleId,
+          profitTokens,
+          ownerShares,
+          borrowerShares,
+          sharesArray,
+          recipientsArray
+        );
+      }
+    }
 
     emit RoleGranted(
       _role.tokenAddress,
@@ -234,45 +257,36 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @notice Decodes the profit share data from the provided calldata.
   /// @param data The encoded profit share data.
   /// @return tokenAddresses The array of token addresses involved in the profit share.
+  /// @return ownerShares The array of token addresses involved in the profit share. // CHANGE THE TEXT
+  /// @return borrowerShares The array of token addresses involved in the profit share.
   /// @return shares The 2D array representing shares of each recipient.
   /// @return recipients The 2D array representing the recipient addresses for each token.
   function _decodeProfitShare(
     bytes calldata data
-  ) internal pure returns (address[] memory tokenAddresses, uint16[][] memory shares, address[][] memory recipients) {
-    (tokenAddresses, shares, recipients) = abi.decode(data, (address[], uint16[][], address[][]));
-
-    require(tokenAddresses.length == shares.length, "Mismatched tokenAddresses and shares length");
-    require(tokenAddresses.length == recipients.length, "Mismatched tokenAddresses and recipients length");
-
-    return (tokenAddresses, shares, recipients);
+  )
+    internal
+    pure
+    returns (
+      address[] memory tokenAddresses,
+      uint16[] memory ownerShares,
+      uint16[] memory borrowerShares,
+      uint16[][] memory shares,
+      address[][] memory recipients
+    )
+  {
+    return abi.decode(data, (address[], uint16[], uint16[], uint16[][], address[][]));
   }
 
-  /// @notice Handles the profit share data by decoding it and storing it in the contract's storage.
-  /// @param _tokenAddress The address of the token involved in the role.
-  /// @param _tokenId The identifier of the token.
-  /// @param _roleId The role identifier related to the profit share.
-  /// @param data The encoded profit share data to be decoded and stored.
-  function _handleProfitShareData(address _tokenAddress, uint256 _tokenId, bytes32 _roleId, bytes calldata data) internal {
-    (address[] memory profitTokens, uint16[][] memory sharesArray, address[][] memory recipientsArray) = _decodeProfitShare(data);
-
-    uint256 tokenCount = profitTokens.length;
-
-    require(tokenCount > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
-    require(sharesArray.length == tokenCount && recipientsArray.length == tokenCount, "ParcelRolesRegistryFacet: Array length mismatch");
-
-    uint16[] memory ownerShares = new uint16[](tokenCount);
-    uint16[] memory borrowerShares = new uint16[](tokenCount);
-
-    for (uint256 i = 0; i < tokenCount; i++) {
-      uint16 ownerShare = sharesArray[i][0];
-      uint16 borrowerShare = sharesArray[i][1];
-
-      _validateShares(sharesArray[i], ownerShare, borrowerShare);
-
-      ownerShares[i] = ownerShare;
-      borrowerShares[i] = borrowerShare;
-    }
-
+  function _handleProfitShareData(
+    address _tokenAddress,
+    uint256 _tokenId,
+    bytes32 _roleId,
+    address[] memory profitTokens,
+    uint16[] memory ownerShares,
+    uint16[] memory borrowerShares,
+    uint16[][] memory sharesArray,
+    address[][] memory recipientsArray
+  ) internal {
     ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
 
     profitShare.ownerShare = ownerShares;
@@ -280,6 +294,10 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     profitShare.tokenAddresses = profitTokens;
     profitShare.shares = sharesArray;
     profitShare.recipients = recipientsArray;
+
+    for (uint256 i = 0; i < profitTokens.length; i++) {
+      _validateShares(sharesArray[i], ownerShares[i], borrowerShares[i]);
+    }
   }
 
   /// @notice Validates the shares for a single token.
@@ -287,13 +305,13 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @param ownerShare The global owner share.
   /// @param borrowerShare The global borrower share.a
   function _validateShares(uint16[] memory shares, uint16 ownerShare, uint16 borrowerShare) internal pure {
-    require(shares.length >= 2, "ParcelRolesRegistryFacet: Each shares array must have at least owner and borrower shares");
+    require(shares.length >= 0, "ParcelRolesRegistryFacet: Each shares array must have at least owner and borrower shares");
 
     uint16 remainingShare = 10000 - ownerShare - borrowerShare;
 
     uint16 totalRecipientShares = 0;
-    for (uint256 j = 2; j < shares.length; j++) {
-      totalRecipientShares += shares[j];
+    for (uint256 i = 0; i < shares.length; i++) {
+      totalRecipientShares += shares[i];
     }
     require(totalRecipientShares == remainingShare, "ParcelRolesRegistryFacet: Recipient shares do not match the remaining share");
   }

@@ -25,6 +25,8 @@ describe("ParcelRolesRegistryFacet", async () => {
   let recipient2: SignerWithAddress;
   let recipient3: SignerWithAddress;
   let recipient4: SignerWithAddress;
+  let recipient5: SignerWithAddress;
+  let recipient6: SignerWithAddress;
   let borrower: SignerWithAddress;
   let mockERC721: Contract;
   let mockERC20: Contract;
@@ -66,7 +68,9 @@ describe("ParcelRolesRegistryFacet", async () => {
     recipient2 = signers[5];
     recipient3 = signers[6];
     recipient4 = signers[7];
-    borrower = signers[8];
+    recipient5 = signers[8];
+    recipient6 = signers[9];
+    borrower = signers[10];
 
     const MockERC721 = await ethers.getContractFactory("MockERC721");
     mockERC721 = await MockERC721.deploy();
@@ -291,17 +295,19 @@ describe("ParcelRolesRegistryFacet", async () => {
   describe("grantRole with Profit Share", async () => {
     const ONE_DAY = 60 * 60 * 24;
     let roleWithProfitShare;
-  
+
     beforeEach(async () => {
       const tokenAddresses = [mockERC20.address];
-      const shares = [[3000, 4000, 1500, 1500]];
+      const ownerShares = [3000];
+      const borrowerShares = [4000];
+      const shares = [[1500, 1500]];
       const recipients = [[recipient1.address, recipient2.address]];
-  
+
       const encodedData = ethers.utils.defaultAbiCoder.encode(
-        ["address[]", "uint16[][]", "address[][]"],
-        [tokenAddresses, shares, recipients]
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
       );
-  
+
       roleWithProfitShare = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
@@ -312,7 +318,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         data: encodedData,
       };
     });
-  
+
     it("should process profit share for AlchemicaChanneling role with valid owner and borrower shares", async () => {
       await expect(
         parcelRolesRegistryFacet.connect(owner).grantRole(roleWithProfitShare)
@@ -328,7 +334,7 @@ describe("ParcelRolesRegistryFacet", async () => {
           roleWithProfitShare.revocable,
           roleWithProfitShare.data
         );
-  
+
       const [
         storedOwnerShares,
         storedBorrowerShares,
@@ -340,37 +346,39 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleWithProfitShare.tokenId,
         roleWithProfitShare.roleId
       );
-  
+
       expect(storedOwnerShares).to.deep.equal([3000]);
       expect(storedBorrowerShares).to.deep.equal([4000]);
-  
+
       const totalRemainingShare =
         10000 - storedOwnerShares[0] - storedBorrowerShares[0];
       expect(totalRemainingShare).to.equal(3000);
-  
+
       expect(storedTokenAddresses.length).to.equal(1);
       expect(storedTokenAddresses).to.deep.equal([mockERC20.address]);
-  
+
       expect(storedSharesArray.length).to.equal(1);
-      expect(storedSharesArray[0]).to.deep.equal([3000, 4000, 1500, 1500]);
-  
+      expect(storedSharesArray[0]).to.deep.equal([1500, 1500]);
+
       expect(storedRecipientsArray.length).to.equal(1);
       expect(storedRecipientsArray[0]).to.deep.equal([
         recipient1.address,
         recipient2.address,
       ]);
     });
-  
+
     it("should allow ownerShare + borrowerShare to equal 100%", async () => {
       const tokenAddresses = [mockERC20.address];
-      const shares = [[6000, 4000]];
+      const ownerShares = [6000];
+      const borrowerShares = [4000];
+      const shares = [[]];
       const recipients = [[]];
-  
+
       const encodedDataValid = ethers.utils.defaultAbiCoder.encode(
-        ["address[]", "uint16[][]", "address[][]"],
-        [tokenAddresses, shares, recipients]
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
       );
-  
+
       const validRole = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
@@ -380,11 +388,11 @@ describe("ParcelRolesRegistryFacet", async () => {
         revocable: true,
         data: encodedDataValid,
       };
-  
+
       await expect(
         parcelRolesRegistryFacet.connect(owner).grantRole(validRole)
       ).to.emit(parcelRolesRegistryFacet, "RoleGranted");
-  
+
       const [
         storedOwnerShares,
         storedBorrowerShares,
@@ -396,33 +404,36 @@ describe("ParcelRolesRegistryFacet", async () => {
         validRole.tokenId,
         validRole.roleId
       );
-  
+
       expect(storedOwnerShares).to.deep.equal([6000]);
       expect(storedBorrowerShares).to.deep.equal([4000]);
-  
-      const remainingShare = 10000 - storedOwnerShares[0] - storedBorrowerShares[0];
+
+      const remainingShare =
+        10000 - storedOwnerShares[0] - storedBorrowerShares[0];
       expect(remainingShare).to.equal(0); // Since owner + borrower shares sum to 10000
-  
+
       expect(storedTokenAddresses.length).to.equal(1);
       expect(storedTokenAddresses).to.deep.equal([mockERC20.address]);
-  
+
       expect(storedSharesArray.length).to.equal(1);
-      expect(storedSharesArray[0]).to.deep.equal([6000, 4000]);
-  
+      expect(storedSharesArray[0]).to.deep.equal([]);
+
       expect(storedRecipientsArray.length).to.equal(1);
       expect(storedRecipientsArray[0]).to.deep.equal([]); // No recipients
     });
-  
+
     it("should revert if recipient shares do not match the remaining share", async () => {
       const tokenAddresses = [mockERC20.address];
-      const shares = [[3000, 4000, 1000, 1000]];
+      const ownerShares = [3000];
+      const borrowerShares = [4000];
+      const shares = [[1000, 1000]];
       const recipients = [[recipient1.address, recipient2.address]];
-  
+
       const encodedDataInvalid = ethers.utils.defaultAbiCoder.encode(
-        ["address[]", "uint16[][]", "address[][]"],
-        [tokenAddresses, shares, recipients]
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
       );
-  
+
       const invalidRole = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
@@ -432,24 +443,28 @@ describe("ParcelRolesRegistryFacet", async () => {
         revocable: true,
         data: encodedDataInvalid,
       };
-  
+
       await expect(
         parcelRolesRegistryFacet.connect(owner).grantRole(invalidRole)
       ).to.be.revertedWith(
         "ParcelRolesRegistryFacet: Recipient shares do not match the remaining share"
       );
     });
-  
-    it("should revert if recipient shares don't sum to the remaining share after owner and borrower shares", async () => {
-      const tokenAddresses = [mockERC20.address];
-      const shares = [[3000, 4000, 1500, 500]];
-      const recipients = [[recipient1.address, recipient2.address]];
-  
+
+    it("should revert if data is invalid", async () => {
+      // Simulate invalid data that will fail the length checks
+      const tokenAddresses = []; // Length 1
+      const ownerShares = [1000]; // Length 0
+      const borrowerShares = []; // Length 0
+      const shares = [[]]; // Length matches tokenAddresses but is invalid
+      const recipients = [[]]; // Length matches tokenAddresses but is invalid
+
+      // Encode the invalid data
       const encodedDataInvalid = ethers.utils.defaultAbiCoder.encode(
-        ["address[]", "uint16[][]", "address[][]"],
-        [tokenAddresses, shares, recipients]
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
       );
-  
+
       const invalidRole = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
@@ -459,30 +474,180 @@ describe("ParcelRolesRegistryFacet", async () => {
         revocable: true,
         data: encodedDataInvalid,
       };
-  
+
       await expect(
         parcelRolesRegistryFacet.connect(owner).grantRole(invalidRole)
       ).to.be.revertedWith(
-        "ParcelRolesRegistryFacet: Recipient shares do not match the remaining share"
+        "ParcelRolesRegistryFacet: No profit tokens provided"
       );
     });
-  
+
+    it("should revert if ownerShares.length does not match tokenAddresses.length", async function () {
+      const tokenAddresses = [mockERC20.address, ethers.constants.AddressZero];
+      const ownerShares = [3000];
+      const borrowerShares = [4000, 3000];
+      const shares = [
+        [1500, 1500],
+        [1500, 1500],
+      ];
+      const recipients = [
+        [recipient1.address, recipient2.address],
+        [recipient3.address, recipient4.address],
+      ];
+
+      const encodedDataInvalid = ethers.utils.defaultAbiCoder.encode(
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
+      );
+
+      const invalidRole = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 1,
+        recipient: borrower.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: encodedDataInvalid,
+      };
+
+      await expect(
+        parcelRolesRegistryFacet.connect(owner).grantRole(invalidRole)
+      ).to.be.revertedWith(
+        "ParcelRolesRegistryFacet: Mismatched ownerShares length"
+      );
+    });
+
+    it("should revert if borrowerShares.length does not match tokenAddresses.length", async function () {
+      const tokenAddresses = [mockERC20.address, ethers.constants.AddressZero];
+      const ownerShares = [3000, 4000];
+      const borrowerShares = [4000]; // Should be 2
+      const shares = [
+        [1500, 1500],
+        [1500, 1500],
+      ];
+      const recipients = [
+        [recipient1.address, recipient2.address],
+        [recipient3.address, recipient4.address],
+      ];
+
+      const encodedDataInvalid = ethers.utils.defaultAbiCoder.encode(
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
+      );
+
+      const invalidRole = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 1,
+        recipient: borrower.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: encodedDataInvalid,
+      };
+
+      await expect(
+        parcelRolesRegistryFacet.connect(owner).grantRole(invalidRole)
+      ).to.be.revertedWith(
+        "ParcelRolesRegistryFacet: Mismatched borrowerShares length"
+      );
+    });
+
+    it("should revert if sharesArray.length does not match tokenAddresses.length", async function () {
+      const tokenAddresses = [mockERC20.address, ethers.constants.AddressZero];
+      const ownerShares = [3000, 4000];
+      const borrowerShares = [4000, 3000];
+      const shares = [
+        [1500, 1500],
+        [1500, 1500],
+        [1500, 1500], // Extra shares array
+      ];
+      const recipients = [
+        [recipient1.address, recipient2.address],
+        [recipient3.address, recipient4.address],
+      ];
+
+      const encodedDataInvalid = ethers.utils.defaultAbiCoder.encode(
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
+      );
+
+      const invalidRole = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 1,
+        recipient: borrower.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: encodedDataInvalid,
+      };
+
+      await expect(
+        parcelRolesRegistryFacet.connect(owner).grantRole(invalidRole)
+      ).to.be.revertedWith(
+        "ParcelRolesRegistryFacet: Shares array length mismatch"
+      );
+    });
+
+    it("should revert if recipientsArray.length does not match tokenAddresses.length", async function () {
+      const tokenAddresses = [mockERC20.address, ethers.constants.AddressZero];
+      const ownerShares = [3000, 4000];
+      const borrowerShares = [4000, 3000];
+      const shares = [
+        [1500, 1500],
+        [1500, 1500],
+      ];
+      const recipients = [
+        [recipient1.address, recipient2.address],
+        [recipient3.address, recipient4.address],
+        [recipient5.address, recipient6.address], // Extra recipients array
+      ];
+
+      const encodedDataInvalid = ethers.utils.defaultAbiCoder.encode(
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
+      );
+
+      const invalidRole = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 1,
+        recipient: borrower.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: encodedDataInvalid,
+      };
+
+      await expect(
+        parcelRolesRegistryFacet.connect(owner).grantRole(invalidRole)
+      ).to.be.revertedWith(
+        "ParcelRolesRegistryFacet: Recipients array length mismatch"
+      );
+    });
+
     it("should store the correct profit share data for multiple tokens with different owner and borrower shares", async () => {
       const profitTokens = [mockERC20.address, ethers.constants.AddressZero];
+      const ownerShares = [3000, 4000];
+      const borrowerShares = [4000, 3000];
       const sharesArray = [
-        [3000, 4000, 1500, 1500],
-        [4000, 3000, 1500, 1500],
+        [1500, 1500],
+        [1500, 1500],
       ];
       const recipientsArray = [
         [recipient1.address, recipient2.address],
         [recipient3.address, recipient4.address],
       ];
-  
+
       const encodedDataValid = ethers.utils.defaultAbiCoder.encode(
-        ["address[]", "uint16[][]", "address[][]"],
-        [profitTokens, sharesArray, recipientsArray]
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [
+          profitTokens,
+          ownerShares,
+          borrowerShares,
+          sharesArray,
+          recipientsArray,
+        ]
       );
-  
+
       const roleWithProfitShare = {
         roleId: ROLE_ALCHEMICA_CHANNELING,
         tokenAddress: mockERC721.address,
@@ -492,7 +657,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         revocable: true,
         data: encodedDataValid,
       };
-  
+
       await expect(
         parcelRolesRegistryFacet.connect(owner).grantRole(roleWithProfitShare)
       )
@@ -507,7 +672,7 @@ describe("ParcelRolesRegistryFacet", async () => {
           roleWithProfitShare.revocable,
           roleWithProfitShare.data
         );
-  
+
       const [
         storedOwnerShares,
         storedBorrowerShares,
@@ -519,31 +684,25 @@ describe("ParcelRolesRegistryFacet", async () => {
         roleWithProfitShare.tokenId,
         roleWithProfitShare.roleId
       );
-  
+
       expect(storedTokenAddresses.length).to.equal(2);
       expect(storedTokenAddresses).to.deep.equal([
         mockERC20.address,
         ethers.constants.AddressZero,
       ]);
-  
+
       expect(storedSharesArray.length).to.equal(2);
-  
+
       expect(storedRecipientsArray.length).to.equal(2);
-  
+
       // Verify owner and borrower shares for each token
       expect(storedOwnerShares).to.deep.equal([3000, 4000]);
       expect(storedBorrowerShares).to.deep.equal([4000, 3000]);
-  
+
       for (let i = 0; i < storedSharesArray.length; i++) {
-        const [ownerShare, borrowerShare] = storedSharesArray[i];
-  
-        const expectedOwnerShare = i === 0 ? 3000 : 4000;
-        const expectedBorrowerShare = i === 0 ? 4000 : 3000;
-  
-        expect(ownerShare).to.equal(expectedOwnerShare);
-        expect(borrowerShare).to.equal(expectedBorrowerShare);
+        expect(storedSharesArray[i]).to.deep.equal([1500, 1500]);
       }
-  
+
       expect(storedRecipientsArray[0]).to.deep.equal([
         recipient1.address,
         recipient2.address,
@@ -553,7 +712,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         recipient4.address,
       ]);
     });
-  
+
     it("should allow empty data for non-profit-share roles", async () => {
       const nonProfitRole = {
         roleId: ROLE_EQUIP_INSTALLATIONS,
@@ -564,7 +723,7 @@ describe("ParcelRolesRegistryFacet", async () => {
         revocable: true,
         data: "0x",
       };
-  
+
       await expect(
         parcelRolesRegistryFacet.connect(owner).grantRole(nonProfitRole)
       )
@@ -579,7 +738,7 @@ describe("ParcelRolesRegistryFacet", async () => {
           nonProfitRole.revocable,
           nonProfitRole.data
         );
-  
+
       const roleData = await parcelRolesRegistryFacet.roleData(
         nonProfitRole.tokenAddress,
         nonProfitRole.tokenId,
@@ -588,7 +747,6 @@ describe("ParcelRolesRegistryFacet", async () => {
       expect(roleData).to.equal("0x");
     });
   });
-  
 
   describe("revokeRole", async () => {
     let role1: {

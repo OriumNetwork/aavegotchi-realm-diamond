@@ -32,7 +32,7 @@ export async function deployParcelsRolesRegistryFacet(mockERC721Address: string)
         "function roleExpirationDate(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) external view returns (uint64 expirationDate_)",
         "function isRoleRevocable(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) external view returns (bool revocable_)",
         "function isRoleApprovedForAll(address _tokenAddress, address _owner, address _operator) external view returns (bool)",
-        "function getProfitShare(address _tokenAddress,uint256 _tokenId,bytes32 _roleId) external view returns ( uint16 ownerShare, uint16 borrowerShare, address[] memory tokenAddresses, uint16[][] memory sharesArray, address[][] memory recipientsArray)"
+        "function getProfitShare(address _tokenAddress,uint256 _tokenId,bytes32 _roleId) external view returns (uint16[] ownerShare, uint16[] borrowerShare, address[] memory tokenAddresses, uint16[][] memory sharesArray, address[][] memory recipientsArray)"
       ],
       removeSelectors: [],
     },
