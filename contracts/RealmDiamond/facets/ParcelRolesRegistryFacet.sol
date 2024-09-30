@@ -36,8 +36,6 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
     require(_roleData.revocable || _roleData.expirationDate < block.timestamp, "ParcelRolesRegistryFacet: role must be expired or revocable");
 
-    s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId] = RoleData(_role.recipient, _role.expirationDate, _role.revocable);
-
     if (_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()")) {
       require(_role.data.length > 0, "ParcelRolesRegistryFacet: No informations provided in ProfitShare");
 
@@ -66,6 +64,8 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
         recipientsArray
       );
     }
+
+    s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId] = RoleData(_role.recipient, _role.expirationDate, _role.revocable);
 
     emit RoleGranted(
       _role.tokenAddress,
@@ -281,15 +281,15 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     address _tokenAddress,
     uint256 _tokenId,
     bytes32 _roleId,
-    address[] memory profitTokens,
+    address[] memory tokenAddresses,
     uint16[] memory ownerShares,
     uint16[] memory borrowerShares,
     uint16[][] memory sharesArray,
     address[][] memory recipientsArray
   ) internal {
-    s.profitShares[_tokenAddress][_tokenId][_roleId] = ProfitShare(ownerShares, borrowerShares, profitTokens, sharesArray, recipientsArray);
+    s.profitShares[_tokenAddress][_tokenId][_roleId] = ProfitShare(ownerShares, borrowerShares, tokenAddresses, sharesArray, recipientsArray);
 
-    for (uint256 i = 0; i < profitTokens.length; i++) {
+    for (uint256 i = 0; i < tokenAddresses.length; i++) {
       _validateShares(sharesArray[i], ownerShares[i], borrowerShares[i]);
     }
   }
@@ -299,8 +299,6 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @param ownerShare The global owner share.
   /// @param borrowerShare The global borrower share.a
   function _validateShares(uint16[] memory shares, uint16 ownerShare, uint16 borrowerShare) internal pure {
-    require(shares.length >= 0, "ParcelRolesRegistryFacet: Each shares array must have at least owner and borrower shares");
-
     uint16 totalRecipientShares = ownerShare + borrowerShare;
     for (uint256 i = 0; i < shares.length; i++) {
       totalRecipientShares += shares[i];
