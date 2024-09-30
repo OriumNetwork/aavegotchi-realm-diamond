@@ -36,7 +36,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
     require(_roleData.revocable || _roleData.expirationDate < block.timestamp, "ParcelRolesRegistryFacet: role must be expired or revocable");
 
-    s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId] = RoleData(_role.recipient, _role.expirationDate, _role.revocable, _role.data);
+    s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId] = RoleData(_role.recipient, _role.expirationDate, _role.revocable);
 
     if (_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()")) {
       require(_role.data.length > 0, "ParcelRolesRegistryFacet: No informations provided in ProfitShare");
@@ -170,7 +170,10 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
   function roleData(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) external view override returns (bytes memory data_) {
     if (s.erc7432_roles[_tokenAddress][_tokenId][_roleId].expirationDate > block.timestamp) {
-      return data_ = s.erc7432_roles[_tokenAddress][_tokenId][_roleId].data;
+      if (_roleId == keccak256("AlchemicaChanneling()") || _roleId == keccak256("EmptyReservoir()")) {
+        ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
+        return abi.encode(profitShare.ownerShare, profitShare.borrowerShare, profitShare.tokenAddresses, profitShare.shares, profitShare.recipients);
+      }
     }
     return "";
   }
@@ -284,13 +287,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     uint16[][] memory sharesArray,
     address[][] memory recipientsArray
   ) internal {
-    ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
-
-    profitShare.ownerShare = ownerShares;
-    profitShare.borrowerShare = borrowerShares;
-    profitShare.tokenAddresses = profitTokens;
-    profitShare.shares = sharesArray;
-    profitShare.recipients = recipientsArray;
+    s.profitShares[_tokenAddress][_tokenId][_roleId] = ProfitShare(ownerShares, borrowerShares, profitTokens, sharesArray, recipientsArray);
 
     for (uint256 i = 0; i < profitTokens.length; i++) {
       _validateShares(sharesArray[i], ownerShares[i], borrowerShares[i]);
@@ -304,13 +301,11 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   function _validateShares(uint16[] memory shares, uint16 ownerShare, uint16 borrowerShare) internal pure {
     require(shares.length >= 0, "ParcelRolesRegistryFacet: Each shares array must have at least owner and borrower shares");
 
-    uint16 remainingShare = 10000 - ownerShare - borrowerShare;
-
-    uint16 totalRecipientShares = 0;
+    uint16 totalRecipientShares = ownerShare + borrowerShare;
     for (uint256 i = 0; i < shares.length; i++) {
       totalRecipientShares += shares[i];
     }
-    require(totalRecipientShares == remainingShare, "ParcelRolesRegistryFacet: Recipient shares do not match the remaining share");
+    require(totalRecipientShares == 10000, "ParcelRolesRegistryFacet: Recipient shares do not match the remaining share");
   }
 
   function supportsInterface(bytes4 interfaceId) external view virtual override returns (bool) {

@@ -70,7 +70,6 @@ struct RoleData {
   address recipient;
   uint64 expirationDate;
   bool revocable;
-  bytes data;
 }
 
 struct ProfitShare {

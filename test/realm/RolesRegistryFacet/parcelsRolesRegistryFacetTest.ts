@@ -44,6 +44,7 @@ describe("ParcelRolesRegistryFacet", async () => {
     ethers.utils.toUtf8Bytes("EquipInstallations()")
   );
 
+
   const ROLE_TEST = ethers.utils.keccak256(
     ethers.utils.toUtf8Bytes("testRole()")
   );
@@ -145,7 +146,7 @@ describe("ParcelRolesRegistryFacet", async () => {
   describe("grantRole", async () => {
     it("should revert when sender is not owner or approved", async () => {
       const role = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 1,
         recipient: grantee.address,
@@ -163,7 +164,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revert when the user is not approved nor the original owner of the NFT", async () => {
       const role = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 1,
         recipient: grantee.address,
@@ -185,7 +186,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revert when tokenAddress is not Realm", async () => {
       const role = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: anotherMockERC721.address,
         tokenId: 1,
         recipient: grantee.address,
@@ -219,7 +220,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revert when expirationDate is zero", async () => {
       const role = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 1,
         recipient: grantee.address,
@@ -237,7 +238,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should grant role when sender is owner", async () => {
       const role = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 1,
         recipient: grantee.address,
@@ -262,7 +263,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should grant role when sender is approved by owner", async () => {
       const role = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 1,
         recipient: grantee.address,
@@ -290,6 +291,22 @@ describe("ParcelRolesRegistryFacet", async () => {
           role.data
         );
     });
+    it("should revert when granting AlchemicaChanneling role without ProfitShare data", async () => {
+      const roleWithoutProfitShare = {
+          roleId: ROLE_ALCHEMICA_CHANNELING,
+          tokenAddress: mockERC721.address,
+          tokenId: 1,
+          recipient: borrower.address,
+          expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+          revocable: true,
+          data: "0x",
+      };
+  
+      await expect(
+          parcelRolesRegistryFacet.connect(owner).grantRole(roleWithoutProfitShare)
+      ).to.be.revertedWith("ParcelRolesRegistryFacet: No informations provided in ProfitShare");
+  });
+  
   });
 
   describe("grantRole with Profit Share", async () => {
@@ -761,7 +778,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     beforeEach(async () => {
       role1 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 1,
         recipient: grantee.address,
@@ -819,7 +836,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revoke role when sender is owner, and role is not revocable but is expired", async () => {
       const role2 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 2,
         recipient: grantee.address,
@@ -855,7 +872,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revoke role when sender is owner, and role is revocable", async () => {
       const role2 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 2,
         recipient: grantee.address,
@@ -934,7 +951,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revert if role was already revoked", async () => {
       const role2 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 2,
         recipient: grantee.address,
@@ -973,7 +990,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revert when role is not revocable nor expired", async () => {
       const role = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 1,
         recipient: grantee.address,
@@ -1018,7 +1035,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should unlock token when all roles are revocable or expired", async () => {
       role1 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 3,
         recipient: grantee.address,
@@ -1074,7 +1091,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revert unlock token when one role is non revocable or non expired", async () => {
       role1 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 4,
         recipient: grantee.address,
@@ -1128,7 +1145,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revert when NFT is locked with non-revocable role", async () => {
       role1 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 5,
         recipient: grantee.address,
@@ -1158,7 +1175,7 @@ describe("ParcelRolesRegistryFacet", async () => {
     });
     it("should revert if sender is not original owner or approved", async () => {
       role1 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 5,
         recipient: grantee.address,
@@ -1180,7 +1197,7 @@ describe("ParcelRolesRegistryFacet", async () => {
   describe("AccessRight", async () => {
     it("should allow role recipient to access after granting the role", async () => {
       const role1 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 6,
         recipient: grantee.address,
@@ -1208,7 +1225,7 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revert if user without role or ownership tries to access", async () => {
       const role1 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 6,
         recipient: grantee.address,
@@ -1238,7 +1255,7 @@ describe("ParcelRolesRegistryFacet", async () => {
   describe("setRoleApproval", async () => {
     it("should set role approve for all", async () => {
       const role1 = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
+        roleId: ROLE_EQUIP_INSTALLATIONS,
         tokenAddress: mockERC721.address,
         tokenId: 1,
         recipient: grantee.address,
