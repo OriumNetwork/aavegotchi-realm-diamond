@@ -318,9 +318,9 @@ describe("ParcelRolesRegistryFacet", async () => {
         );
 
       const [
-        storedOwnerShares,
-        storedBorrowerShares,
         storedTokenAddresses,
+        storedOwnerShares,
+        storedBorrowerShares,     
         storedSharesArray,
         storedRecipientsArray,
       ] = await parcelRolesRegistryFacet.getProfitShare(
@@ -376,9 +376,9 @@ describe("ParcelRolesRegistryFacet", async () => {
       ).to.emit(parcelRolesRegistryFacet, "RoleGranted");
 
       const [
+        storedTokenAddresses,
         storedOwnerShares,
         storedBorrowerShares,
-        storedTokenAddresses,
         storedSharesArray,
         storedRecipientsArray,
       ] = await parcelRolesRegistryFacet.getProfitShare(
@@ -435,13 +435,12 @@ describe("ParcelRolesRegistryFacet", async () => {
 
     it("should revert if data is invalid", async () => {
       // Simulate invalid data that will fail the length checks
-      const tokenAddresses = []; // Length 1
-      const ownerShares = [1000]; // Length 0
+      const tokenAddresses = []; //Length 0
+      const ownerShares = [1000]; // Length 1
       const borrowerShares = []; // Length 0
       const shares = [[]]; // Length matches tokenAddresses but is invalid
       const recipients = [[]]; // Length matches tokenAddresses but is invalid
 
-      // Encode the invalid data
       const encodedDataInvalid = ethers.utils.defaultAbiCoder.encode(
         ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
         [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
@@ -656,9 +655,9 @@ describe("ParcelRolesRegistryFacet", async () => {
         );
 
       const [
-        storedOwnerShares,
-        storedBorrowerShares,
         storedTokenAddresses,
+        storedOwnerShares,
+        storedBorrowerShares,     
         storedSharesArray,
         storedRecipientsArray,
       ] = await parcelRolesRegistryFacet.getProfitShare(
@@ -728,6 +727,58 @@ describe("ParcelRolesRegistryFacet", async () => {
       );
       expect(roleData).to.equal("0x");
     });
+
+    it("should return encoded data that decodes to the correct structure", async function () {
+      const tokenAddresses = [mockERC20.address];
+      const ownerShares = [3000];
+      const borrowerShares = [4000];
+      const shares = [[1500, 1500]];
+      const recipients = [[recipient1.address, recipient2.address]];
+    
+      const encodedData = ethers.utils.defaultAbiCoder.encode(
+        ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+        [tokenAddresses, ownerShares, borrowerShares, shares, recipients]
+      );
+        
+      const role = {
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 1,
+        recipient: borrower.address,
+        expirationDate: Math.floor(Date.now() / 1000) + 86400,
+        revocable: true,
+        data: encodedData,
+      };
+    
+      await expect(parcelRolesRegistryFacet.connect(owner).grantRole(role))
+        .to.emit(parcelRolesRegistryFacet, "RoleGranted");
+    
+      const encodedRoleData = await parcelRolesRegistryFacet.roleData(
+        mockERC721.address,
+        1,
+        ROLE_ALCHEMICA_CHANNELING
+      );
+    
+      const [decodedTokenAddresses, decodedOwnerShares, decodedBorrowerShares, decodedSharesArray, decodedRecipientsArray] =
+        ethers.utils.defaultAbiCoder.decode(
+          ["address[]", "uint16[]", "uint16[]", "uint16[][]", "address[][]"],
+          encodedRoleData
+        );
+    
+      const expectedTokenAddresses = [mockERC20.address];
+      const expectedOwnerShares = [3000];
+      const expectedBorrowerShares = [4000];
+      const expectedShares = [[1500, 1500]];
+      const expectedRecipients = [[recipient1.address, recipient2.address]];
+    
+      expect(decodedTokenAddresses).to.deep.equal(expectedTokenAddresses);
+      expect(decodedOwnerShares).to.deep.equal(expectedOwnerShares);
+      expect(decodedBorrowerShares).to.deep.equal(expectedBorrowerShares);
+      expect(decodedSharesArray).to.deep.equal(expectedShares);
+      expect(decodedRecipientsArray).to.deep.equal(expectedRecipients);
+    });
+    
+    
   });
 
   describe("revokeRole", async () => {

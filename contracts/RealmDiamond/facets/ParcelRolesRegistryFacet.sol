@@ -169,7 +169,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     if (s.erc7432_roles[_tokenAddress][_tokenId][_roleId].expirationDate > block.timestamp) {
       if (_roleId == keccak256("AlchemicaChanneling()") || _roleId == keccak256("EmptyReservoir()")) {
         ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
-        return abi.encode(profitShare.ownerShare, profitShare.borrowerShare, profitShare.tokenAddresses, profitShare.shares, profitShare.recipients);
+        return abi.encode(profitShare.tokenAddresses, profitShare.ownerShare, profitShare.borrowerShare, profitShare.shares, profitShare.recipients);
       }
     }
     return "";
@@ -196,15 +196,15 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     external
     view
     returns (
+      address[] memory tokenAddresses,
       uint16[] memory ownerShares,
       uint16[] memory borrowerShares,
-      address[] memory tokenAddresses,
       uint16[][] memory sharesArray,
       address[][] memory recipientsArray
     )
   {
     ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
-    return (profitShare.ownerShare, profitShare.borrowerShare, profitShare.tokenAddresses, profitShare.shares, profitShare.recipients);
+    return (profitShare.tokenAddresses, profitShare.ownerShare, profitShare.borrowerShare, profitShare.shares, profitShare.recipients);
   }
 
   /** Internal Functions **/
