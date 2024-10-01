@@ -92,6 +92,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     }
 
     delete s.erc7432_roles[_tokenAddress][_tokenId][_roleId];
+    delete s.profitShares[_tokenAddress][_tokenId][_roleId];
     emit RoleRevoked(_tokenAddress, _tokenId, _roleId);
   }
 
