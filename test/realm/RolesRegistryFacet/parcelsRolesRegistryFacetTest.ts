@@ -44,7 +44,6 @@ describe("ParcelRolesRegistryFacet", async () => {
     ethers.utils.toUtf8Bytes("EquipInstallations()")
   );
 
-
   const ROLE_TEST = ethers.utils.keccak256(
     ethers.utils.toUtf8Bytes("testRole()")
   );
@@ -218,24 +217,6 @@ describe("ParcelRolesRegistryFacet", async () => {
       ).to.be.revertedWith("ParcelRolesRegistryFacet: invalid role ID");
     });
 
-    it("should revert when expirationDate is zero", async () => {
-      const role = {
-        roleId: ROLE_EQUIP_INSTALLATIONS,
-        tokenAddress: mockERC721.address,
-        tokenId: 1,
-        recipient: grantee.address,
-        expirationDate: 0,
-        revocable: true,
-        data: "0x",
-      };
-
-      await expect(
-        parcelRolesRegistryFacet.connect(owner).grantRole(role)
-      ).to.be.revertedWith(
-        "ParcelRolesRegistryFacet: expiration date must be in the future"
-      );
-    });
-
     it("should grant role when sender is owner", async () => {
       const role = {
         roleId: ROLE_EQUIP_INSTALLATIONS,
@@ -293,20 +274,23 @@ describe("ParcelRolesRegistryFacet", async () => {
     });
     it("should revert when granting AlchemicaChanneling role without ProfitShare data", async () => {
       const roleWithoutProfitShare = {
-          roleId: ROLE_ALCHEMICA_CHANNELING,
-          tokenAddress: mockERC721.address,
-          tokenId: 1,
-          recipient: borrower.address,
-          expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
-          revocable: true,
-          data: "0x",
+        roleId: ROLE_ALCHEMICA_CHANNELING,
+        tokenAddress: mockERC721.address,
+        tokenId: 1,
+        recipient: borrower.address,
+        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
+        revocable: true,
+        data: "0x",
       };
-  
+
       await expect(
-          parcelRolesRegistryFacet.connect(owner).grantRole(roleWithoutProfitShare)
-      ).to.be.revertedWith("ParcelRolesRegistryFacet: No informations provided in ProfitShare");
-  });
-  
+        parcelRolesRegistryFacet
+          .connect(owner)
+          .grantRole(roleWithoutProfitShare)
+      ).to.be.revertedWith(
+        "ParcelRolesRegistryFacet: No informations provided in ProfitShare"
+      );
+    });
   });
 
   describe("grantRole with Profit Share", async () => {

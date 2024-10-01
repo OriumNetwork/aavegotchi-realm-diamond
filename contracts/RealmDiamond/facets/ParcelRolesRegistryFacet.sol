@@ -28,8 +28,6 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /** External Functions **/
 
   function grantRole(Role calldata _role) external override onlyValidRole(_role.roleId) onlyRealm(_role.tokenAddress) {
-    require(_role.expirationDate > block.timestamp, "ParcelRolesRegistryFacet: expiration date must be in the future");
-
     address _originalOwner = _depositNft(_role.tokenAddress, _role.tokenId);
 
     RoleData storage _roleData = s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId];
@@ -40,24 +38,24 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
       require(_role.data.length > 0, "ParcelRolesRegistryFacet: No informations provided in ProfitShare");
 
       (
-        address[] memory profitTokens,
+        address[] memory tokenAddresses,
         uint16[] memory ownerShares,
         uint16[] memory borrowerShares,
         uint16[][] memory sharesArray,
         address[][] memory recipientsArray
       ) = _decodeProfitShare(_role.data);
 
-      require(profitTokens.length > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
-      require(ownerShares.length == profitTokens.length, "ParcelRolesRegistryFacet: Mismatched ownerShares length");
-      require(borrowerShares.length == profitTokens.length, "ParcelRolesRegistryFacet: Mismatched borrowerShares length");
-      require(sharesArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
-      require(recipientsArray.length == profitTokens.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
+      require(tokenAddresses.length > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
+      require(ownerShares.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Mismatched ownerShares length");
+      require(borrowerShares.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Mismatched borrowerShares length");
+      require(sharesArray.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
+      require(recipientsArray.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
 
       _handleProfitShareData(
         _role.tokenAddress,
         _role.tokenId,
         _role.roleId,
-        profitTokens,
+        tokenAddresses,
         ownerShares,
         borrowerShares,
         sharesArray,
