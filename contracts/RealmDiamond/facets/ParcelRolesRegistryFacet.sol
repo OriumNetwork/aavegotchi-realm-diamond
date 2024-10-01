@@ -35,8 +35,6 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     require(_roleData.revocable || _roleData.expirationDate < block.timestamp, "ParcelRolesRegistryFacet: role must be expired or revocable");
 
     if (_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()")) {
-      require(_role.data.length > 0, "ParcelRolesRegistryFacet: No informations provided in ProfitShare");
-
       (
         address[] memory tokenAddresses,
         uint16[] memory ownerShares,
