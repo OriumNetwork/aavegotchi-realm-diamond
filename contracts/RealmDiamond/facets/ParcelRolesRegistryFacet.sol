@@ -4,7 +4,7 @@ pragma solidity 0.8.9;
 import {IERC7432} from "../../interfaces/IERC7432.sol";
 import {IERC721} from "../../interfaces/IERC721.sol";
 
-import {Modifiers, RoleData} from "../../libraries/AppStorage.sol";
+import {Modifiers, RoleData, ProfitShare} from "../../libraries/AppStorage.sol";
 
 import {LibAppStorageInstallation, InstallationAppStorage} from "../../libraries/AppStorageInstallation.sol";
 
@@ -28,18 +28,40 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /** External Functions **/
 
   function grantRole(Role calldata _role) external override onlyValidRole(_role.roleId) onlyRealm(_role.tokenAddress) {
-    require(_role.expirationDate > block.timestamp, "ParcelRolesRegistryFacet: expiration date must be in the future");
-
-    // Deposit NFT if necessary and get the original owner
     address _originalOwner = _depositNft(_role.tokenAddress, _role.tokenId);
 
-    // Get role data from storage
     RoleData storage _roleData = s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId];
 
-    // Check if the role is either revocable or expired
     require(_roleData.revocable || _roleData.expirationDate < block.timestamp, "ParcelRolesRegistryFacet: role must be expired or revocable");
 
-    s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId] = RoleData(_role.recipient, _role.expirationDate, _role.revocable, _role.data);
+    if (_role.roleId == keccak256("AlchemicaChanneling()") || _role.roleId == keccak256("EmptyReservoir()")) {
+      (
+        address[] memory tokenAddresses,
+        uint16[] memory ownerShares,
+        uint16[] memory borrowerShares,
+        uint16[][] memory sharesArray,
+        address[][] memory recipientsArray
+      ) = _decodeProfitShare(_role.data);
+
+      require(tokenAddresses.length > 0, "ParcelRolesRegistryFacet: No token addresses provided");
+      require(ownerShares.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Mismatched ownerShares length");
+      require(borrowerShares.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Mismatched borrowerShares length");
+      require(sharesArray.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
+      require(recipientsArray.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
+
+      for (uint256 i = 0; i < tokenAddresses.length; i++) {
+        _validateShares(sharesArray[i], ownerShares[i], borrowerShares[i]);
+      }
+      s.profitShares[_role.tokenAddress][_role.tokenId][_role.roleId] = ProfitShare(
+        ownerShares,
+        borrowerShares,
+        tokenAddresses,
+        sharesArray,
+        recipientsArray
+      );
+    }
+
+    s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId] = RoleData(_role.recipient, _role.expirationDate, _role.revocable);
 
     emit RoleGranted(
       _role.tokenAddress,
@@ -70,6 +92,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     }
 
     delete s.erc7432_roles[_tokenAddress][_tokenId][_roleId];
+    delete s.profitShares[_tokenAddress][_tokenId][_roleId];
     emit RoleRevoked(_tokenAddress, _tokenId, _roleId);
   }
 
@@ -116,7 +139,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     if (_roleData.recipient == address(0)) {
       return false;
     }
-    
+
     return (_roleData.expirationDate < block.timestamp || !_roleData.revocable);
   }
 
@@ -144,7 +167,10 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
 
   function roleData(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) external view override returns (bytes memory data_) {
     if (s.erc7432_roles[_tokenAddress][_tokenId][_roleId].expirationDate > block.timestamp) {
-      return data_ = s.erc7432_roles[_tokenAddress][_tokenId][_roleId].data;
+      if (_roleId == keccak256("AlchemicaChanneling()") || _roleId == keccak256("EmptyReservoir()")) {
+        ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
+        return abi.encode(profitShare.tokenAddresses, profitShare.ownerShare, profitShare.borrowerShare, profitShare.shares, profitShare.recipients);
+      }
     }
     return "";
   }
@@ -162,6 +188,25 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
       s.erc7432_roles[_tokenAddress][_tokenId][_roleId].revocable;
   }
 
+  function getProfitShare(
+    address _tokenAddress,
+    uint256 _tokenId,
+    bytes32 _roleId
+  )
+    external
+    view
+    returns (
+      address[] memory tokenAddresses,
+      uint16[] memory ownerShares,
+      uint16[] memory borrowerShares,
+      uint16[][] memory sharesArray,
+      address[][] memory recipientsArray
+    )
+  {
+    ProfitShare storage profitShare = s.profitShares[_tokenAddress][_tokenId][_roleId];
+    return (profitShare.tokenAddresses, profitShare.ownerShare, profitShare.borrowerShare, profitShare.shares, profitShare.recipients);
+  }
+
   /** Internal Functions **/
 
   /// @notice Updates originalOwner, validates the sender and deposits NFT (if not deposited yet).
@@ -172,14 +217,12 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     address _currentOwner = IERC721(_tokenAddress).ownerOf(_tokenId);
     address _sender = LibMeta.msgSender();
     if (_currentOwner == address(this)) {
-      // if the NFT is already on the contract, check if sender is approved or original owner
       originalOwner_ = s.erc7432OriginalOwners[_tokenAddress][_tokenId];
       require(
         originalOwner_ == _sender || isRoleApprovedForAll(_tokenAddress, originalOwner_, _sender),
         "ParcelRolesRegistryFacet: sender must be owner or approved"
       );
     } else {
-      // if NFT is not in the contract, deposit it and store the original owner
       require(
         _currentOwner == _sender || isRoleApprovedForAll(_tokenAddress, _currentOwner, _sender),
         "ParcelRolesRegistryFacet: sender must be owner or approved"
@@ -206,6 +249,41 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
       return originalOwner;
     }
     revert("ParcelRolesRegistryFacet: sender is not approved");
+  }
+
+  /// @notice Decodes the profit share data from the provided calldata.
+  /// @param data The encoded profit share data.
+  /// @return tokenAddresses The array of token addresses involved in the profit share.
+  /// @return ownerShares The array of owner shares involved in the profit share.
+  /// @return borrowerShares The array of borrower shares involved in the profit share.
+  /// @return shares The matrix representing shares of each recipient.
+  /// @return recipients The matrix representing the recipient addresses for each token.
+  function _decodeProfitShare(
+    bytes calldata data
+  )
+    internal
+    pure
+    returns (
+      address[] memory tokenAddresses,
+      uint16[] memory ownerShares,
+      uint16[] memory borrowerShares,
+      uint16[][] memory shares,
+      address[][] memory recipients
+    )
+  {
+    return abi.decode(data, (address[], uint16[], uint16[], uint16[][], address[][]));
+  }
+
+  /// @notice Validates the shares for a single token.
+  /// @param shares The shares array for the token.
+  /// @param ownerShare The global owner share.
+  /// @param borrowerShare The global borrower share.a
+  function _validateShares(uint16[] memory shares, uint16 ownerShare, uint16 borrowerShare) internal pure {
+    uint16 totalRecipientShares = ownerShare + borrowerShare;
+    for (uint256 i = 0; i < shares.length; i++) {
+      totalRecipientShares += shares[i];
+    }
+    require(totalRecipientShares == 10000, "ParcelRolesRegistryFacet: Recipient shares do not match the remaining share");
   }
 
   function supportsInterface(bytes4 interfaceId) external view virtual override returns (bool) {
