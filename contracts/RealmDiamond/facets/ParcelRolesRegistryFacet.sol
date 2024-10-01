@@ -45,7 +45,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
         address[][] memory recipientsArray
       ) = _decodeProfitShare(_role.data);
 
-      require(tokenAddresses.length > 0, "ParcelRolesRegistryFacet: No profit tokens provided");
+      require(tokenAddresses.length > 0, "ParcelRolesRegistryFacet: No token addresses provided");
       require(ownerShares.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Mismatched ownerShares length");
       require(borrowerShares.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Mismatched borrowerShares length");
       require(sharesArray.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
@@ -285,11 +285,10 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     uint16[][] memory sharesArray,
     address[][] memory recipientsArray
   ) internal {
-    s.profitShares[_tokenAddress][_tokenId][_roleId] = ProfitShare(ownerShares, borrowerShares, tokenAddresses, sharesArray, recipientsArray);
-
     for (uint256 i = 0; i < tokenAddresses.length; i++) {
       _validateShares(sharesArray[i], ownerShares[i], borrowerShares[i]);
     }
+    s.profitShares[_tokenAddress][_tokenId][_roleId] = ProfitShare(ownerShares, borrowerShares, tokenAddresses, sharesArray, recipientsArray);
   }
 
   /// @notice Validates the shares for a single token.
