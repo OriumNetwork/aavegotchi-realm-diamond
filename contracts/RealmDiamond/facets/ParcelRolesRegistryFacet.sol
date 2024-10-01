@@ -49,13 +49,13 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
       require(sharesArray.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Shares array length mismatch");
       require(recipientsArray.length == tokenAddresses.length, "ParcelRolesRegistryFacet: Recipients array length mismatch");
 
-      _handleProfitShareData(
-        _role.tokenAddress,
-        _role.tokenId,
-        _role.roleId,
-        tokenAddresses,
+      for (uint256 i = 0; i < tokenAddresses.length; i++) {
+        _validateShares(sharesArray[i], ownerShares[i], borrowerShares[i]);
+      }
+      s.profitShares[_role.tokenAddress][_role.tokenId][_role.roleId] = ProfitShare(
         ownerShares,
         borrowerShares,
+        tokenAddresses,
         sharesArray,
         recipientsArray
       );
@@ -271,22 +271,6 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     )
   {
     return abi.decode(data, (address[], uint16[], uint16[], uint16[][], address[][]));
-  }
-
-  function _handleProfitShareData(
-    address _tokenAddress,
-    uint256 _tokenId,
-    bytes32 _roleId,
-    address[] memory tokenAddresses,
-    uint16[] memory ownerShares,
-    uint16[] memory borrowerShares,
-    uint16[][] memory sharesArray,
-    address[][] memory recipientsArray
-  ) internal {
-    for (uint256 i = 0; i < tokenAddresses.length; i++) {
-      _validateShares(sharesArray[i], ownerShares[i], borrowerShares[i]);
-    }
-    s.profitShares[_tokenAddress][_tokenId][_roleId] = ProfitShare(ownerShares, borrowerShares, tokenAddresses, sharesArray, recipientsArray);
   }
 
   /// @notice Validates the shares for a single token.

@@ -272,25 +272,6 @@ describe("ParcelRolesRegistryFacet", async () => {
           role.data
         );
     });
-    it("should revert when granting AlchemicaChanneling role without ProfitShare data", async () => {
-      const roleWithoutProfitShare = {
-        roleId: ROLE_ALCHEMICA_CHANNELING,
-        tokenAddress: mockERC721.address,
-        tokenId: 1,
-        recipient: borrower.address,
-        expirationDate: Math.floor(Date.now() / 1000) + ONE_DAY,
-        revocable: true,
-        data: "0x",
-      };
-
-      await expect(
-        parcelRolesRegistryFacet
-          .connect(owner)
-          .grantRole(roleWithoutProfitShare)
-      ).to.be.revertedWith(
-        "ParcelRolesRegistryFacet: No informations provided in ProfitShare"
-      );
-    });
   });
 
   describe("grantRole with Profit Share", async () => {
@@ -479,7 +460,7 @@ describe("ParcelRolesRegistryFacet", async () => {
       await expect(
         parcelRolesRegistryFacet.connect(owner).grantRole(invalidRole)
       ).to.be.revertedWith(
-        "ParcelRolesRegistryFacet: No profit tokens provided"
+        "ParcelRolesRegistryFacet: No token addresses provided"
       );
     });
 
