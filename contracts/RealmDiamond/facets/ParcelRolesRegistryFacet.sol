@@ -254,10 +254,10 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @notice Decodes the profit share data from the provided calldata.
   /// @param data The encoded profit share data.
   /// @return tokenAddresses The array of token addresses involved in the profit share.
-  /// @return ownerShares The array of token addresses involved in the profit share. // CHANGE THE TEXT
-  /// @return borrowerShares The array of token addresses involved in the profit share.
-  /// @return shares The 2D array representing shares of each recipient.
-  /// @return recipients The 2D array representing the recipient addresses for each token.
+  /// @return ownerShares The array of owner shares involved in the profit share.
+  /// @return borrowerShares The array of borrower shares involved in the profit share.
+  /// @return shares The matrix representing shares of each recipient.
+  /// @return recipients The matrix representing the recipient addresses for each token.
   function _decodeProfitShare(
     bytes calldata data
   )
