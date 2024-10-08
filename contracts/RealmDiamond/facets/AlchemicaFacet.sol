@@ -10,6 +10,7 @@ import "../../libraries/LibAlchemica.sol";
 import "../../libraries/LibSignature.sol";
 import {IERC20Extended} from "../../interfaces/IERC20Extended.sol";
 import "contracts/test/ERC20Splitter.sol";
+import {IERC721} from "../../interfaces/IERC721.sol";
 
 uint256 constant bp = 100 ether;
 
@@ -239,7 +240,8 @@ contract AlchemicaFacet is Modifiers {
   }
 
   function _calculateTokenSplits(
-    TokenSplitParams memory params
+    TokenSplitParams memory params,
+    uint256 _realmId
   )
     internal
     view
@@ -254,14 +256,18 @@ contract AlchemicaFacet is Modifiers {
     splitRecipients = new address[][](numTokens);
     recalculatedShares = new uint16[][](numTokens);
     splitAmounts = new uint256[](numTokens);
-    splitTokenAddresses = params.tokenAddresses;
+    splitTokenAddresses = params.tokenAddresses;  
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
+
+    // Retrieve the owner of the realmId from the ERC-721 contract
+    address currentOwner = IERC721(si.realmDiamond).ownerOf(_realmId);
 
     for (uint256 i = 0; i < numTokens; i++) {
       uint256 numRecipients = params.recipients[i].length;
       splitRecipients[i] = new address[](numRecipients + 1);
       recalculatedShares[i] = new uint16[](numRecipients + 1);
 
-      splitRecipients[i][0] = address(this);
+      splitRecipients[i][0] = currentOwner;
       recalculatedShares[i][0] = params.ownerShare;
 
       uint256 recalculatedShareTotal = params.ownerShare;
@@ -293,7 +299,8 @@ contract AlchemicaFacet is Modifiers {
     uint16 borrowerShare,
     address[][] memory recipients,
     uint16[][] memory sharesArray,
-    address[] memory tokenAddresses
+    address[] memory tokenAddresses,
+    uint256 _realmId
   ) internal view returns (SplitCalculation memory splitCalc) {
     (uint256 borrowerAmount, uint256 ownerAmount, uint256 remainingAmount) = _calculateAmounts(_amount, _spilloverRate, ownerShare, borrowerShare);
 
@@ -309,7 +316,8 @@ contract AlchemicaFacet is Modifiers {
         tokenAddresses: tokenAddresses,
         ownerShare: ownerShare,
         borrowerShare: borrowerShare
-      })
+      }),
+      _realmId
     );
   }
 
@@ -325,7 +333,7 @@ contract AlchemicaFacet is Modifiers {
       TransferAmounts memory amounts = calculateTransferAmounts(channelAmount, rate);
 
       if (isLandRented(profitShare.tokenAddresses[tokenIndex], _realmId, _roleId)) {
-        _handleRentedLandChanneling(alchemica, _gotchiId, channelAmount, rate, profitShare, tokenIndex);
+        _handleRentedLandChanneling(alchemica, _gotchiId, _realmId,  channelAmount, rate, profitShare, tokenIndex);
       } else {
         alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
         alchemica.mint(address(this), amounts.spill);
@@ -339,6 +347,7 @@ contract AlchemicaFacet is Modifiers {
   function _handleRentedLandChanneling(
     IERC20Mintable alchemica,
     uint256 _gotchiId,
+    uint256 _realmId,
     uint256 channelAmount,
     uint256 rate,
     ProfitShare storage profitShare,
@@ -351,7 +360,8 @@ contract AlchemicaFacet is Modifiers {
       profitShare.borrowerShare[tokenIndex],
       profitShare.recipients,
       profitShare.shares,
-      profitShare.tokenAddresses
+      profitShare.tokenAddresses,
+      _realmId
     );
 
     alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), splitCalc.borrowerAmount);
