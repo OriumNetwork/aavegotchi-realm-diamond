@@ -80,6 +80,25 @@ struct ProfitShare {
   address[][] recipients;
 }
 
+struct SplitCalculation {
+  uint256 ownerAmount;
+  uint256 borrowerAmount;
+  uint256 remainingAmount;
+  address[][] splitRecipients;
+  uint16[][] recalculatedShares;
+  uint256[] splitAmounts;
+  address[] splitTokenAddresses;
+}
+
+struct TokenSplitParams {
+  uint256 remainingAmount;
+  address[][] recipients;
+  uint16[][] sharesArray;
+  address[] tokenAddresses;
+  uint16 ownerShare;
+  uint16 borrowerShare;
+}
+
 struct AppStorage {
   uint256[] tokenIds;
   mapping(uint256 => Parcel) parcels;

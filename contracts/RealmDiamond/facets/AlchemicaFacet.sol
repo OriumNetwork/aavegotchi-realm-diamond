@@ -9,6 +9,8 @@ import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "../../libraries/LibAlchemica.sol";
 import "../../libraries/LibSignature.sol";
 import {IERC20Extended} from "../../interfaces/IERC20Extended.sol";
+import "contracts/test/ERC20Splitter.sol";
+import {IERC721} from "../../interfaces/IERC721.sol";
 
 uint256 constant bp = 100 ether;
 
@@ -30,6 +32,10 @@ contract AlchemicaFacet is Modifiers {
   event TransferTokensToGotchi(address indexed _sender, uint256 indexed _gotchiId, address _tokenAddresses, uint256 _amount);
 
   error ERC20TransferFailed(string _tokenName);
+
+  // Temporary state variable to hold _gotchiId
+  uint256 private _tempGotchiId;
+  address erc20SplitterAddress;
 
   function isSurveying(uint256 _realmId) external view returns (bool) {
     return s.parcels[_realmId].surveying;
@@ -221,6 +227,150 @@ contract AlchemicaFacet is Modifiers {
     }
   }
 
+  function _calculateAmounts(
+    uint256 _amount,
+    uint256 _spilloverRate,
+    uint16 ownerShare,
+    uint16 borrowerShare
+  ) internal pure returns (uint256 borrowerAmount, uint256 ownerAmount, uint256 remainingAmount) {
+    uint256 totalAmount = (_amount * (bp - (_spilloverRate * 1e16))) / bp;
+    borrowerAmount = (totalAmount * borrowerShare) / bp;
+    ownerAmount = (totalAmount * ownerShare) / bp;
+    remainingAmount = totalAmount - ownerAmount - borrowerAmount;
+  }
+
+  function _calculateTokenSplits(
+    TokenSplitParams memory params,
+    uint256 _realmId
+  )
+    internal
+    view
+    returns (
+      address[][] memory splitRecipients,
+      uint16[][] memory recalculatedShares,
+      uint256[] memory splitAmounts,
+      address[] memory splitTokenAddresses
+    )
+  {
+    uint256 numTokens = params.tokenAddresses.length;
+    splitRecipients = new address[][](numTokens);
+    recalculatedShares = new uint16[][](numTokens);
+    splitAmounts = new uint256[](numTokens);
+    splitTokenAddresses = params.tokenAddresses;
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
+
+    // Retrieve the owner of the realmId from the ERC-721 contract
+    address currentOwner = IERC721(si.realmDiamond).ownerOf(_realmId);
+
+    for (uint256 i = 0; i < numTokens; i++) {
+      uint256 numRecipients = params.recipients[i].length;
+      splitRecipients[i] = new address[](numRecipients + 1);
+      recalculatedShares[i] = new uint16[](numRecipients + 1);
+
+      splitRecipients[i][0] = currentOwner;
+      recalculatedShares[i][0] = params.ownerShare;
+
+      uint256 recalculatedShareTotal = params.ownerShare;
+
+      for (uint256 j = 0; j < numRecipients; j++) {
+        splitRecipients[i][j + 1] = params.recipients[i][j];
+        recalculatedShares[i][j + 1] = params.sharesArray[i][j];
+        recalculatedShareTotal += params.sharesArray[i][j];
+      }
+
+      uint256 recalibrationFactor = ((bp - params.borrowerShare) * bp) / recalculatedShareTotal;
+
+      uint16 totalRecalculated = 0;
+      for (uint256 j = 0; j < recalculatedShares[i].length; j++) {
+        recalculatedShares[i][j] = uint16((recalculatedShares[i][j] * recalibrationFactor) / bp);
+        totalRecalculated += recalculatedShares[i][j];
+      }
+
+      recalculatedShares[i][0] += uint16((bp - params.borrowerShare) - totalRecalculated);
+
+      splitAmounts[i] = (params.remainingAmount * params.ownerShare) / bp;
+    }
+  }
+
+  function _calculateSplit(
+    uint256 _amount,
+    uint256 _spilloverRate,
+    uint16 ownerShare,
+    uint16 borrowerShare,
+    address[][] memory recipients,
+    uint16[][] memory sharesArray,
+    address[] memory tokenAddresses,
+    uint256 _realmId
+  ) internal view returns (SplitCalculation memory splitCalc) {
+    (uint256 borrowerAmount, uint256 ownerAmount, uint256 remainingAmount) = _calculateAmounts(_amount, _spilloverRate, ownerShare, borrowerShare);
+
+    splitCalc.borrowerAmount = borrowerAmount;
+    splitCalc.ownerAmount = ownerAmount;
+    splitCalc.remainingAmount = remainingAmount;
+
+    (splitCalc.splitRecipients, splitCalc.recalculatedShares, splitCalc.splitAmounts, splitCalc.splitTokenAddresses) = _calculateTokenSplits(
+      TokenSplitParams({
+        remainingAmount: remainingAmount,
+        recipients: recipients,
+        sharesArray: sharesArray,
+        tokenAddresses: tokenAddresses,
+        ownerShare: ownerShare,
+        borrowerShare: borrowerShare
+      }),
+      _realmId
+    );
+  }
+
+  function _handleTokenChanneling(uint256 _realmId, bytes32 _roleId, uint256 channelAmount, uint256 tokenIndex) internal {
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
+    (uint256 rate, ) = InstallationDiamondInterface(s.installationsDiamond).spilloverRateAndRadiusOfId(s.parcels[_realmId].altarId);
+    ProfitShare storage profitShare = s.profitShares[si.realmDiamond][_realmId][_roleId];
+    uint256 _gotchiId = _tempGotchiId;
+
+    IERC20Mintable alchemica = IERC20Mintable(profitShare.tokenAddresses[tokenIndex]);
+
+    if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[tokenIndex]) {
+      TransferAmounts memory amounts = calculateTransferAmounts(channelAmount, rate);
+
+      if (isLandRented(profitShare.tokenAddresses[tokenIndex], _realmId, _roleId)) {
+        _handleRentedLandChanneling(alchemica, _gotchiId, _realmId, channelAmount, rate, profitShare, tokenIndex);
+      } else {
+        alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
+        alchemica.mint(address(this), amounts.spill);
+      }
+    } else {
+      TransferAmounts memory amounts = calculateTransferAmounts(channelAmount, rate);
+      alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
+    }
+  }
+
+  function _handleRentedLandChanneling(
+    IERC20Mintable alchemica,
+    uint256 _gotchiId,
+    uint256 _realmId,
+    uint256 channelAmount,
+    uint256 rate,
+    ProfitShare storage profitShare,
+    uint256 tokenIndex
+  ) internal {
+    SplitCalculation memory splitCalc = _calculateSplit(
+      channelAmount,
+      rate,
+      profitShare.ownerShare[tokenIndex],
+      profitShare.borrowerShare[tokenIndex],
+      profitShare.recipients,
+      profitShare.shares,
+      profitShare.tokenAddresses,
+      _realmId
+    );
+
+    alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), splitCalc.borrowerAmount);
+    alchemica.mint(address(this), splitCalc.remainingAmount);
+
+    ERC20Splitter splitter = ERC20Splitter(erc20SplitterAddress);
+    splitter.deposit(splitCalc.splitTokenAddresses, splitCalc.splitAmounts, splitCalc.recalculatedShares, splitCalc.splitRecipients);
+  }
+
   /// @notice Allow a parcel owner to channel alchemica
   /// @dev This transfers alchemica to the parent ERC721 token with id _gotchiId and also to the great portal
   /// @param _realmId Identifier of parcel where alchemica is being channeled from
@@ -273,21 +423,10 @@ contract AlchemicaFacet is Modifiers {
       channelAmounts[i] = (channelAmounts[i] * kinshipModifier) / 100;
     }
 
+    bytes32 roleId = keccak256("AlchemicaChanneling()");
+
     for (uint256 i; i < channelAmounts.length; i++) {
-      IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[i]);
-
-      //Mint new tokens if the Great Portal Balance is less than capacity
-
-      if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
-
-        alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
-        alchemica.mint(address(this), amounts.spill);
-      } else {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
-
-        alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
-      }
+      _handleTokenChanneling(_realmId, roleId, channelAmounts[i], i);
     }
 
     //update latest channeling
@@ -405,5 +544,18 @@ contract AlchemicaFacet is Modifiers {
     for (uint256 i; i < _to.length; i++) {
       _batchTransferTokens(_tokens[i], _amounts[i], _to[i]);
     }
+  }
+
+  /**
+   * @notice Checks if a specific role is active (not expired).
+   * @param _tokenAddress The address of the token associated with the role.
+   * @param _tokenId The ID of the token associated with the role.
+   * @param _roleId The ID of the role to check.
+   * @return isActive True if the role is active, false otherwise.
+   */
+  function isLandRented(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) public view returns (bool isActive) {
+    IERC7432 rolesRegistry = IERC7432(s.parcelRolesRegistryFacetAddress);
+    uint64 expirationDate = rolesRegistry.roleExpirationDate(_tokenAddress, _tokenId, _roleId);
+    return expirationDate > block.timestamp;
   }
 }
