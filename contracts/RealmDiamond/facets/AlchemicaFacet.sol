@@ -256,7 +256,7 @@ contract AlchemicaFacet is Modifiers {
     splitRecipients = new address[][](numTokens);
     recalculatedShares = new uint16[][](numTokens);
     splitAmounts = new uint256[](numTokens);
-    splitTokenAddresses = params.tokenAddresses;  
+    splitTokenAddresses = params.tokenAddresses;
     InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
 
     // Retrieve the owner of the realmId from the ERC-721 contract
@@ -333,7 +333,7 @@ contract AlchemicaFacet is Modifiers {
       TransferAmounts memory amounts = calculateTransferAmounts(channelAmount, rate);
 
       if (isLandRented(profitShare.tokenAddresses[tokenIndex], _realmId, _roleId)) {
-        _handleRentedLandChanneling(alchemica, _gotchiId, _realmId,  channelAmount, rate, profitShare, tokenIndex);
+        _handleRentedLandChanneling(alchemica, _gotchiId, _realmId, channelAmount, rate, profitShare, tokenIndex);
       } else {
         alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
         alchemica.mint(address(this), amounts.spill);
