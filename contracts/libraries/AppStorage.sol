@@ -152,6 +152,7 @@ struct AppStorage {
   mapping(uint256 => bytes32) actionRightToRole;
   mapping(address => mapping(uint256 => mapping(bytes32 => ProfitShare))) profitShares;
   address parcelRolesRegistryFacetAddress;
+  address splitterContractAddress;
 }
 
 library LibAppStorage {
