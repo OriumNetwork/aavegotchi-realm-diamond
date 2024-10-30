@@ -2,12 +2,17 @@
 pragma solidity 0.8.9;
 
 import {InstallationDiamondInterface} from "../interfaces/InstallationDiamondInterface.sol";
-import {LibAppStorage, AppStorage, Parcel} from "./AppStorage.sol";
+
+import {LibAppStorage, AppStorage, Parcel, TokenSplitParams, SplitCalculation, ProfitShare} from "./AppStorage.sol";
+import {LibAppStorageInstallation, InstallationAppStorage, InstallationType} from "./AppStorageInstallation.sol";
 import "../interfaces/IERC20Mintable.sol";
 import "../interfaces/AavegotchiDiamond.sol";
+import "../interfaces/IERC7432.sol";
+import "contracts/test/ERC20Splitter.sol";
 
 library LibAlchemica {
   uint256 constant bp = 100 ether;
+  uint256 constant splitBP = 10000;
 
   event AlchemicaClaimed(
     uint256 indexed _realmId,
@@ -17,6 +22,11 @@ library LibAlchemica {
     uint256 _spilloverRate,
     uint256 _spilloverRadius
   );
+
+  struct TransferAmounts {
+    uint256 owner;
+    uint256 spill;
+  }
 
   function settleUnclaimedAlchemica(uint256 _tokenId, uint256 _alchemicaType) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
@@ -40,11 +50,7 @@ library LibAlchemica {
     s.parcels[_tokenId].lastUpdateTimestamp[_alchemicaType] = block.timestamp;
   }
 
-  function increaseTraits(
-    uint256 _realmId,
-    uint256 _installationId,
-    bool isUpgrade
-  ) internal {
+  function increaseTraits(uint256 _realmId, uint256 _installationId, bool isUpgrade) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     //First save the current harvested amount
@@ -110,11 +116,7 @@ library LibAlchemica {
     }
   }
 
-  function reduceTraits(
-    uint256 _realmId,
-    uint256 _installationId,
-    bool isUpgrade
-  ) internal {
+  function reduceTraits(uint256 _realmId, uint256 _installationId, bool isUpgrade) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     InstallationDiamondInterface installationsDiamond = InstallationDiamondInterface(s.installationsDiamond);
@@ -254,15 +256,14 @@ library LibAlchemica {
   }
 
   function calculateTransferAmounts(uint256 _amount, uint256 _spilloverRate) internal pure returns (uint256 owner, uint256 spill) {
-    owner = (_amount * (bp - (_spilloverRate * 10**16))) / bp;
-    spill = (_amount * (_spilloverRate * 10**16)) / bp;
+    owner = (_amount * (bp - (_spilloverRate * 10 ** 16))) / bp;
+    spill = (_amount * (_spilloverRate * 10 ** 16)) / bp;
   }
 
-  function calculateSpilloverForReservoir(uint256 _realmId, uint256 _alchemicaType)
-    internal
-    view
-    returns (uint256 spilloverRate, uint256 spilloverRadius)
-  {
+  function calculateSpilloverForReservoir(
+    uint256 _realmId,
+    uint256 _alchemicaType
+  ) internal view returns (uint256 spilloverRate, uint256 spilloverRadius) {
     AppStorage storage s = LibAppStorage.diamondStorage();
     uint256 capacityXspillrate;
     uint256 capacityXspillradius;
@@ -296,35 +297,70 @@ library LibAlchemica {
 
   function claimAvailableAlchemica(uint256 _realmId, uint256 _gotchiId) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
 
     require(block.timestamp > s.lastClaimedAlchemica[_realmId] + 8 hours, "AlchemicaFacet: 8 hours claim cooldown");
     s.lastClaimedAlchemica[_realmId] = block.timestamp;
 
-    for (uint256 i; i < 4; i++) {
-      uint256 remaining = s.parcels[_realmId].alchemicaRemaining[i];
-      uint256 available = getAvailableAlchemica(_realmId, i);
-      available = remaining < available ? remaining : available;
+    bytes32 roleId = keccak256("EmptyReservoir()");
 
-      s.parcels[_realmId].alchemicaRemaining[i] -= available;
-      s.parcels[_realmId].unclaimedAlchemica[i] = 0;
-      s.parcels[_realmId].lastUpdateTimestamp[i] = block.timestamp;
+    for (uint256 i = 0; i < 4; i++) {
+      uint256 available = _updateAvailableAlchemica(_realmId, i);
 
       (uint256 spilloverRate, uint256 spilloverRadius) = calculateSpilloverForReservoir(_realmId, i);
       (uint256 ownerAmount, uint256 spillAmount) = calculateTransferAmounts(available, spilloverRate);
 
-      //Mint new tokens
-      mintAvailableAlchemica(i, _gotchiId, ownerAmount, spillAmount);
+      ProfitShare storage profitShare = s.profitShares[si.realmDiamond][_realmId][roleId];
+
+      if (isLandRented(profitShare.tokenAddresses[0], _realmId, roleId)) {
+        _distributeRentedAlchemica(_gotchiId, available, spilloverRate, profitShare, i);
+      } else {
+        mintAvailableAlchemica(i, _gotchiId, ownerAmount, spillAmount);
+      }
 
       emit AlchemicaClaimed(_realmId, _gotchiId, i, available, spilloverRate, spilloverRadius);
     }
   }
 
-  function mintAvailableAlchemica(
-    uint256 _alchemicaType,
+  function _updateAvailableAlchemica(uint256 _realmId, uint256 _alchemicaType) internal returns (uint256 available) {
+    AppStorage storage s = LibAppStorage.diamondStorage();
+
+    uint256 remaining = s.parcels[_realmId].alchemicaRemaining[_alchemicaType];
+    available = getAvailableAlchemica(_realmId, _alchemicaType);
+    available = remaining < available ? remaining : available;
+
+    s.parcels[_realmId].alchemicaRemaining[_alchemicaType] -= available;
+    s.parcels[_realmId].unclaimedAlchemica[_alchemicaType] = 0;
+    s.parcels[_realmId].lastUpdateTimestamp[_alchemicaType] = block.timestamp;
+  }
+
+  function _distributeRentedAlchemica(
     uint256 _gotchiId,
-    uint256 _ownerAmount,
-    uint256 _spillAmount
+    uint256 available,
+    uint256 spilloverRate,
+    ProfitShare storage profitShare,
+    uint256 tokenIndex
   ) internal {
+    AppStorage storage s = LibAppStorage.diamondStorage();
+    SplitCalculation memory splitCalc = _calculateSplit(
+      available,
+      spilloverRate,
+      profitShare.ownerShare[tokenIndex],
+      profitShare.borrowerShare[tokenIndex],
+      profitShare.recipients,
+      profitShare.shares,
+      profitShare.tokenAddresses
+    );
+
+    IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[tokenIndex]);
+    alchemica.mint(alchemicaRecipient(_gotchiId), splitCalc.borrowerAmount);
+    alchemica.mint(address(this), splitCalc.remainingAmount);
+
+    ERC20Splitter splitter = ERC20Splitter(s.splitterContractAddress);
+    splitter.deposit(splitCalc.splitTokenAddresses, splitCalc.splitAmounts, splitCalc.recalculatedShares, splitCalc.splitRecipients);
+  }
+
+  function mintAvailableAlchemica(uint256 _alchemicaType, uint256 _gotchiId, uint256 _ownerAmount, uint256 _spillAmount) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
 
     IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[_alchemicaType]);
@@ -347,5 +383,169 @@ library LibAlchemica {
   function popArray(uint256[] storage _array, uint256 _index) internal {
     _array[_index] = _array[_array.length - 1];
     _array.pop();
+  }
+
+  function _calculateAmounts(
+    uint256 _amount,
+    uint256 _spilloverRate,
+    uint16 ownerShare,
+    uint16 borrowerShare
+  ) internal pure returns (uint256 borrowerAmount, uint256 ownerAmount, uint256 remainingAmount) {
+    uint256 totalAmount = (_amount * (bp - (_spilloverRate * 1e16))) / bp;
+    borrowerAmount = (totalAmount * borrowerShare) / bp;
+    ownerAmount = (totalAmount * ownerShare) / bp;
+    remainingAmount = totalAmount - ownerAmount - borrowerAmount;
+  }
+
+  function _calculateTokenSplits(
+    TokenSplitParams memory params
+  )
+    internal
+    returns (
+      address[][] memory splitRecipients,
+      uint16[][] memory recalculatedShares,
+      uint256[] memory splitAmounts,
+      address[] memory splitTokenAddresses
+    )
+  {
+    uint256 numTokens = params.tokenAddresses.length;
+    splitRecipients = new address[][](numTokens);
+    recalculatedShares = new uint16[][](numTokens);
+    splitAmounts = new uint256[](numTokens);
+    splitTokenAddresses = params.tokenAddresses;
+
+    for (uint256 i = 0; i < numTokens; i++) {
+      uint256 numRecipients = params.recipients[i].length;
+      splitRecipients[i] = new address[](numRecipients + 1); 
+      recalculatedShares[i] = new uint16[](numRecipients + 1);
+
+      splitRecipients[i][0] = address(this);
+      recalculatedShares[i][0] = params.ownerShare;
+
+      uint256 recalculatedShareTotal = params.ownerShare;
+      for (uint256 j = 0; j < numRecipients; j++) {
+        splitRecipients[i][j + 1] = params.recipients[i][j];
+        recalculatedShares[i][j + 1] = params.sharesArray[i][j];
+        recalculatedShareTotal += params.sharesArray[i][j];
+      }
+
+      uint256 recalibrationFactor = (splitBP * splitBP) / recalculatedShareTotal;
+
+      uint256 totalRecalculated = 0;
+
+      for (uint256 j = 0; j < recalculatedShares[i].length; j++) {
+        uint256 recalculated = (recalculatedShares[i][j] * recalibrationFactor) / splitBP;
+
+        require(recalculated <= type(uint16).max, "Recalculated share exceeds uint16");
+
+        recalculatedShares[i][j] = uint16(recalculated);
+        totalRecalculated += recalculatedShares[i][j];
+      }
+
+      uint256 discrepancy = splitBP - totalRecalculated;
+      require(discrepancy <= type(uint16).max, "Discrepancy exceeds uint16");
+
+      recalculatedShares[i][0] += uint16(discrepancy);
+
+      splitAmounts[i] = (params.remainingAmount * params.ownerShare) / splitBP;
+    }
+  }
+
+  function _calculateSplit(
+    uint256 _amount,
+    uint256 _spilloverRate,
+    uint16 ownerShare,
+    uint16 borrowerShare,
+    address[][] memory recipients,
+    uint16[][] memory sharesArray,
+    address[] memory tokenAddresses
+  ) internal returns (SplitCalculation memory splitCalc) {
+    (uint256 borrowerAmount, uint256 ownerAmount, uint256 remainingAmount) = _calculateAmounts(_amount, _spilloverRate, ownerShare, borrowerShare);
+
+    splitCalc.borrowerAmount = borrowerAmount;
+    splitCalc.ownerAmount = ownerAmount;
+    splitCalc.remainingAmount = remainingAmount;
+
+    (splitCalc.splitRecipients, splitCalc.recalculatedShares, splitCalc.splitAmounts, splitCalc.splitTokenAddresses) = _calculateTokenSplits(
+      TokenSplitParams({
+        remainingAmount: remainingAmount,
+        recipients: recipients,
+        sharesArray: sharesArray,
+        tokenAddresses: tokenAddresses,
+        ownerShare: ownerShare,
+        borrowerShare: borrowerShare
+      })
+    );
+  }
+
+  function _handleTokenChanneling(uint256 _realmId, bytes32 _roleId, uint256 channelAmount, uint256 tokenIndex) internal {
+    uint256 _tempGotchiId;
+    AppStorage storage s = LibAppStorage.diamondStorage();
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
+
+    (uint256 rate, ) = InstallationDiamondInterface(s.installationsDiamond).spilloverRateAndRadiusOfId(s.parcels[_realmId].altarId);
+    ProfitShare storage profitShare = s.profitShares[si.realmDiamond][_realmId][_roleId];
+    uint256 _gotchiId = _tempGotchiId;
+
+    IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[tokenIndex]);
+
+    if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[tokenIndex]) {
+      (uint256 ownerAmount, uint256 spillAmount) = calculateTransferAmounts(channelAmount, rate);
+
+      if (isLandRented(profitShare.tokenAddresses[0], _realmId, _roleId)) {
+        _handleRentedLandChanneling(alchemica, _gotchiId, channelAmount, rate, profitShare, tokenIndex);
+      } else {
+        alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), ownerAmount);
+        alchemica.mint(address(this), spillAmount);
+      }
+    } else {
+      if (isLandRented(profitShare.tokenAddresses[0], _realmId, _roleId)) {
+        _handleRentedLandChanneling(alchemica, _gotchiId, channelAmount, rate, profitShare, tokenIndex);
+      } else {
+        (uint256 ownerAmount, ) = calculateTransferAmounts(channelAmount, rate);
+        alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), ownerAmount);
+      }
+    }
+  }
+
+  function _handleRentedLandChanneling(
+    IERC20Mintable alchemica,
+    uint256 _gotchiId,
+    uint256 channelAmount,
+    uint256 rate,
+    ProfitShare storage profitShare,
+    uint256 tokenIndex
+  ) internal {
+    AppStorage storage s = LibAppStorage.diamondStorage();
+    SplitCalculation memory splitCalc = _calculateSplit(
+      channelAmount,
+      rate,
+      profitShare.ownerShare[tokenIndex],
+      profitShare.borrowerShare[tokenIndex],
+      profitShare.recipients,
+      profitShare.shares,
+      profitShare.tokenAddresses
+    );
+
+    alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), splitCalc.borrowerAmount);
+    alchemica.mint(address(this), splitCalc.remainingAmount);
+
+    ERC20Splitter splitter = ERC20Splitter(s.splitterContractAddress);
+
+    splitter.deposit(splitCalc.splitTokenAddresses, splitCalc.splitAmounts, splitCalc.recalculatedShares, splitCalc.splitRecipients);
+  }
+
+  /**
+   * @notice Checks if a specific role is active (not expired).
+   * @param _tokenAddress The address of the token associated with the role.
+   * @param _tokenId The ID of the token associated with the role.
+   * @param _roleId The ID of the role to check.
+   * @return isActive True if the role is active, false otherwise.
+   */
+  function isLandRented(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) internal view returns (bool isActive) {
+    AppStorage storage s = LibAppStorage.diamondStorage();
+    IERC7432 rolesRegistry = IERC7432(s.parcelRolesRegistryFacetAddress);
+    uint64 expirationDate = rolesRegistry.roleExpirationDate(_tokenAddress, _tokenId, _roleId);
+    return expirationDate > block.timestamp;
   }
 }
