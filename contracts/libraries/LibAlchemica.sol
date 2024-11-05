@@ -401,6 +401,7 @@ library LibAlchemica {
     TokenSplitParams memory params
   )
     internal
+    view
     returns (
       address[][] memory splitRecipients,
       uint16[][] memory recalculatedShares,
@@ -459,7 +460,8 @@ library LibAlchemica {
     address[][] memory recipients,
     uint16[][] memory sharesArray,
     address[] memory tokenAddresses
-  ) internal returns (SplitCalculation memory splitCalc) {
+  ) internal     view
+returns (SplitCalculation memory splitCalc) {
     (uint256 borrowerAmount, uint256 ownerAmount, uint256 remainingAmount) = _calculateAmounts(_amount, _spilloverRate, ownerShare, borrowerShare);
 
     splitCalc.borrowerAmount = borrowerAmount;
