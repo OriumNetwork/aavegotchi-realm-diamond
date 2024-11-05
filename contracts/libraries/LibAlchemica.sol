@@ -302,7 +302,7 @@ library LibAlchemica {
     require(block.timestamp > s.lastClaimedAlchemica[_realmId] + 8 hours, "AlchemicaFacet: 8 hours claim cooldown");
     s.lastClaimedAlchemica[_realmId] = block.timestamp;
 
-    bytes32 roleId = keccak256("EmptyReservoir()");
+    bytes32 roleId = s.actionRightToRole[1];
 
     for (uint256 i = 0; i < 4; i++) {
       uint256 available = _updateAvailableAlchemica(_realmId, i);
@@ -416,7 +416,7 @@ library LibAlchemica {
 
     for (uint256 i = 0; i < numTokens; i++) {
       uint256 numRecipients = params.recipients[i].length;
-      splitRecipients[i] = new address[](numRecipients + 1); 
+      splitRecipients[i] = new address[](numRecipients + 1);
       recalculatedShares[i] = new uint16[](numRecipients + 1);
 
       splitRecipients[i][0] = address(this);
@@ -478,14 +478,12 @@ library LibAlchemica {
     );
   }
 
-  function _handleTokenChanneling(uint256 _realmId, bytes32 _roleId, uint256 channelAmount, uint256 tokenIndex) internal {
-    uint256 _tempGotchiId;
+  function _handleTokenChanneling(uint256 _realmId, bytes32 _roleId, uint256 channelAmount, uint256 tokenIndex, uint256 _gotchiId) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
     InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
 
     (uint256 rate, ) = InstallationDiamondInterface(s.installationsDiamond).spilloverRateAndRadiusOfId(s.parcels[_realmId].altarId);
     ProfitShare storage profitShare = s.profitShares[si.realmDiamond][_realmId][_roleId];
-    uint256 _gotchiId = _tempGotchiId;
 
     IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[tokenIndex]);
 
