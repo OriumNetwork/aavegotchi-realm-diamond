@@ -9,6 +9,7 @@ import "../interfaces/IERC20Mintable.sol";
 import "../interfaces/AavegotchiDiamond.sol";
 import "../interfaces/IERC7432.sol";
 import "contracts/test/ERC20Splitter.sol";
+import {IERC721} from "../interfaces/IERC721.sol";
 
 library LibAlchemica {
   uint256 constant bp = 100 ether;
@@ -312,8 +313,8 @@ library LibAlchemica {
 
       ProfitShare storage profitShare = s.profitShares[si.realmDiamond][_realmId][roleId];
 
-      if (isLandRented(profitShare.tokenAddresses[0], _realmId, roleId)) {
-        _distributeRentedAlchemica(_gotchiId, available, spilloverRate, profitShare, i);
+      if (i < profitShare.tokenAddresses.length && isLandRented(profitShare.tokenAddresses[i], _realmId, roleId)) {
+        _distributeRentedAlchemica(_gotchiId, _realmId, available, spilloverRate, profitShare, i);
       } else {
         mintAvailableAlchemica(i, _gotchiId, ownerAmount, spillAmount);
       }
@@ -336,12 +337,14 @@ library LibAlchemica {
 
   function _distributeRentedAlchemica(
     uint256 _gotchiId,
+    uint256 _realmdId,
     uint256 available,
     uint256 spilloverRate,
     ProfitShare storage profitShare,
     uint256 tokenIndex
   ) internal {
     AppStorage storage s = LibAppStorage.diamondStorage();
+
     SplitCalculation memory splitCalc = _calculateSplit(
       available,
       spilloverRate,
@@ -349,7 +352,8 @@ library LibAlchemica {
       profitShare.borrowerShare[tokenIndex],
       profitShare.recipients,
       profitShare.shares,
-      profitShare.tokenAddresses
+      profitShare.tokenAddresses,
+      _realmdId
     );
 
     IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[tokenIndex]);
@@ -357,7 +361,18 @@ library LibAlchemica {
     alchemica.mint(address(this), splitCalc.remainingAmount);
 
     ERC20Splitter splitter = ERC20Splitter(s.splitterContractAddress);
-    splitter.deposit(splitCalc.splitTokenAddresses, splitCalc.splitAmounts, splitCalc.recalculatedShares, splitCalc.splitRecipients);
+    uint256 totalEthAmount = 0;
+    for (uint256 i = 0; i < splitCalc.splitTokenAddresses.length; i++) {
+      if (splitCalc.splitTokenAddresses[i] == address(0)) {
+        totalEthAmount += splitCalc.splitAmounts[i];
+      }
+    }
+    splitter.deposit{value: totalEthAmount}(
+      splitCalc.splitTokenAddresses,
+      splitCalc.splitAmounts,
+      splitCalc.recalculatedShares,
+      splitCalc.splitRecipients
+    );
   }
 
   function mintAvailableAlchemica(uint256 _alchemicaType, uint256 _gotchiId, uint256 _ownerAmount, uint256 _spillAmount) internal {
@@ -398,7 +413,8 @@ library LibAlchemica {
   }
 
   function _calculateTokenSplits(
-    TokenSplitParams memory params
+    TokenSplitParams memory params,
+    uint256 _realmId
   )
     internal
     view
@@ -415,12 +431,15 @@ library LibAlchemica {
     splitAmounts = new uint256[](numTokens);
     splitTokenAddresses = params.tokenAddresses;
 
+    AppStorage storage s = LibAppStorage.diamondStorage();
+    InstallationAppStorage storage si = LibAppStorageInstallation.diamondStorage();
+
     for (uint256 i = 0; i < numTokens; i++) {
       uint256 numRecipients = params.recipients[i].length;
       splitRecipients[i] = new address[](numRecipients + 1);
       recalculatedShares[i] = new uint16[](numRecipients + 1);
 
-      splitRecipients[i][0] = address(this);
+      splitRecipients[i][0] = s.erc7432OriginalOwners[si.realmDiamond][_realmId];
       recalculatedShares[i][0] = params.ownerShare;
 
       uint256 recalculatedShareTotal = params.ownerShare;
@@ -430,13 +449,10 @@ library LibAlchemica {
         recalculatedShareTotal += params.sharesArray[i][j];
       }
 
-      uint256 recalibrationFactor = (splitBP * splitBP) / recalculatedShareTotal;
-
+      // Use recalculatedShareTotal directly to compute recalibrated shares
       uint256 totalRecalculated = 0;
-
       for (uint256 j = 0; j < recalculatedShares[i].length; j++) {
-        uint256 recalculated = (recalculatedShares[i][j] * recalibrationFactor) / splitBP;
-
+        uint256 recalculated = (recalculatedShares[i][j] * splitBP * splitBP) / (recalculatedShareTotal * splitBP);
         require(recalculated <= type(uint16).max, "Recalculated share exceeds uint16");
 
         recalculatedShares[i][j] = uint16(recalculated);
@@ -459,9 +475,9 @@ library LibAlchemica {
     uint16 borrowerShare,
     address[][] memory recipients,
     uint16[][] memory sharesArray,
-    address[] memory tokenAddresses
-  ) internal     view
-returns (SplitCalculation memory splitCalc) {
+    address[] memory tokenAddresses,
+    uint256 _realmId
+  ) internal view returns (SplitCalculation memory splitCalc) {
     (uint256 borrowerAmount, uint256 ownerAmount, uint256 remainingAmount) = _calculateAmounts(_amount, _spilloverRate, ownerShare, borrowerShare);
 
     splitCalc.borrowerAmount = borrowerAmount;
@@ -476,7 +492,8 @@ returns (SplitCalculation memory splitCalc) {
         tokenAddresses: tokenAddresses,
         ownerShare: ownerShare,
         borrowerShare: borrowerShare
-      })
+      }),
+      _realmId
     );
   }
 
@@ -492,15 +509,15 @@ returns (SplitCalculation memory splitCalc) {
     if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[tokenIndex]) {
       (uint256 ownerAmount, uint256 spillAmount) = calculateTransferAmounts(channelAmount, rate);
 
-      if (isLandRented(profitShare.tokenAddresses[0], _realmId, _roleId)) {
-        _handleRentedLandChanneling(alchemica, _gotchiId, channelAmount, rate, profitShare, tokenIndex);
+      if (isLandRented(profitShare.tokenAddresses[tokenIndex], _realmId, _roleId)) {
+        _handleRentedLandChanneling(alchemica, _gotchiId, _realmId, channelAmount, rate, profitShare, tokenIndex);
       } else {
         alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), ownerAmount);
         alchemica.mint(address(this), spillAmount);
       }
     } else {
-      if (isLandRented(profitShare.tokenAddresses[0], _realmId, _roleId)) {
-        _handleRentedLandChanneling(alchemica, _gotchiId, channelAmount, rate, profitShare, tokenIndex);
+      if (isLandRented(profitShare.tokenAddresses[tokenIndex], _realmId, _roleId)) {
+        _handleRentedLandChanneling(alchemica, _gotchiId, _realmId, channelAmount, rate, profitShare, tokenIndex);
       } else {
         (uint256 ownerAmount, ) = calculateTransferAmounts(channelAmount, rate);
         alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), ownerAmount);
@@ -511,6 +528,7 @@ returns (SplitCalculation memory splitCalc) {
   function _handleRentedLandChanneling(
     IERC20Mintable alchemica,
     uint256 _gotchiId,
+    uint256 _realmId,
     uint256 channelAmount,
     uint256 rate,
     ProfitShare storage profitShare,
@@ -524,7 +542,8 @@ returns (SplitCalculation memory splitCalc) {
       profitShare.borrowerShare[tokenIndex],
       profitShare.recipients,
       profitShare.shares,
-      profitShare.tokenAddresses
+      profitShare.tokenAddresses,
+      _realmId
     );
 
     alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), splitCalc.borrowerAmount);
@@ -546,6 +565,7 @@ returns (SplitCalculation memory splitCalc) {
     AppStorage storage s = LibAppStorage.diamondStorage();
     IERC7432 rolesRegistry = IERC7432(s.parcelRolesRegistryFacetAddress);
     uint64 expirationDate = rolesRegistry.roleExpirationDate(_tokenAddress, _tokenId, _roleId);
+
     return expirationDate > block.timestamp;
   }
 }

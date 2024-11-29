@@ -3,6 +3,7 @@ pragma solidity 0.8.9;
 
 import {IERC7432} from "../../interfaces/IERC7432.sol";
 import {IERC721} from "../../interfaces/IERC721.sol";
+import "../../libraries/LibERC721.sol";
 
 import {Modifiers, RoleData, ProfitShare} from "../../libraries/AppStorage.sol";
 
@@ -25,10 +26,19 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     _;
   }
 
+  function setExpirationDate(address _tokenAddress, uint256 _tokenId, bytes32 _roleId, uint64 _expirationDate) external {
+    AppStorage storage s = LibAppStorage.diamondStorage();
+    s.erc7432_roles[_tokenAddress][_tokenId][_roleId].expirationDate = _expirationDate;
+  }
+
   /** External Functions **/
 
   function grantRole(Role calldata _role) external override onlyValidRole(_role.roleId) onlyRealm(_role.tokenAddress) {
+    AppStorage storage s = LibAppStorage.diamondStorage();
+
     address _originalOwner = _depositNft(_role.tokenAddress, _role.tokenId);
+
+    s.erc7432OriginalOwners[_role.tokenAddress][_role.tokenId] = _originalOwner;
 
     RoleData storage _roleData = s.erc7432_roles[_role.tokenAddress][_role.tokenId][_role.roleId];
 
@@ -52,6 +62,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
       for (uint256 i = 0; i < tokenAddresses.length; i++) {
         _validateShares(sharesArray[i], ownerShares[i], borrowerShares[i]);
       }
+
       s.profitShares[_role.tokenAddress][_role.tokenId][_role.roleId] = ProfitShare(
         ownerShares,
         borrowerShares,
@@ -158,7 +169,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
     return s.erc7432OriginalOwners[_tokenAddress][_tokenId];
   }
 
-  function recipientOf(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) external view override returns (address recipient_) {
+  function recipientOf(address _tokenAddress, uint256 _tokenId, bytes32 _roleId) public view override returns (address recipient_) {
     if (s.erc7432_roles[_tokenAddress][_tokenId][_roleId].expirationDate > block.timestamp) {
       return s.erc7432_roles[_tokenAddress][_tokenId][_roleId].recipient;
     }
@@ -215,7 +226,9 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
   /// @return originalOwner_ The original owner of the NFT.
   function _depositNft(address _tokenAddress, uint256 _tokenId) internal returns (address originalOwner_) {
     address _currentOwner = IERC721(_tokenAddress).ownerOf(_tokenId);
+
     address _sender = LibMeta.msgSender();
+
     if (_currentOwner == address(this)) {
       originalOwner_ = s.erc7432OriginalOwners[_tokenAddress][_tokenId];
       require(
@@ -227,7 +240,7 @@ contract ParcelRolesRegistryFacet is Modifiers, IERC7432 {
         _currentOwner == _sender || isRoleApprovedForAll(_tokenAddress, _currentOwner, _sender),
         "ParcelRolesRegistryFacet: sender must be owner or approved"
       );
-      IERC721(_tokenAddress).transferFrom(_currentOwner, address(this), _tokenId);
+      LibERC721.transferFrom(_sender, _currentOwner, address(this), _tokenId);
       s.erc7432OriginalOwners[_tokenAddress][_tokenId] = _currentOwner;
       originalOwner_ = _currentOwner;
       emit TokenLocked(_currentOwner, _tokenAddress, _tokenId);
