@@ -9,6 +9,8 @@ import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "../../libraries/LibAlchemica.sol";
 import "../../libraries/LibSignature.sol";
 import {IERC20Extended} from "../../interfaces/IERC20Extended.sol";
+import "contracts/test/ERC20Splitter.sol";
+import {IERC721} from "../../interfaces/IERC721.sol";
 
 uint256 constant bp = 100 ether;
 
@@ -273,21 +275,10 @@ contract AlchemicaFacet is Modifiers {
       channelAmounts[i] = (channelAmounts[i] * kinshipModifier) / 100;
     }
 
+    bytes32 roleId = s.actionRightToRole[0];
+
     for (uint256 i; i < channelAmounts.length; i++) {
-      IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[i]);
-
-      //Mint new tokens if the Great Portal Balance is less than capacity
-
-      if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
-
-        alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
-        alchemica.mint(address(this), amounts.spill);
-      } else {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
-
-        alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
-      }
+      LibAlchemica._handleTokenChanneling(_realmId, roleId, channelAmounts[i], i, _gotchiId);
     }
 
     //update latest channeling

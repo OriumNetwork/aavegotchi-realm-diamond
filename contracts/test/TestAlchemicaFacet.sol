@@ -7,10 +7,15 @@ import "../libraries/LibMeta.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "../libraries/LibAlchemica.sol";
 import "../libraries/LibSignature.sol";
+import "contracts/test/ERC20Splitter.sol";
 
 uint256 constant bp = 100 ether;
+uint256 constant splitBP = 10000;
+
 
 contract TestAlchemicaFacet is Modifiers {
+
+  uint256 private _tempGotchiId;
   event ChannelAlchemica(
     uint256 indexed _realmId,
     uint256 indexed _gotchiId,
@@ -18,11 +23,6 @@ contract TestAlchemicaFacet is Modifiers {
     uint256 _spilloverRate,
     uint256 _spilloverRadius
   );
-
-  struct TransferAmounts {
-    uint256 owner;
-    uint256 spill;
-  }
 
   /// @notice Allow a parcel owner to channel alchemica
   /// @dev This transfers alchemica to the parent ERC721 token with id _gotchiId and also to the great portal
@@ -41,10 +41,10 @@ contract TestAlchemicaFacet is Modifiers {
 
     //finally interact while reducing kinship
     diamond.reduceKinshipViaChanneling(uint32(_gotchiId));
-
+    
     //0 - alchemical channeling
     LibRealm.verifyAccessRight(_realmId, _gotchiId, 0, LibMeta.msgSender());
-
+    
     require(_lastChanneled == s.gotchiChannelings[_gotchiId], "AlchemicaFacet: Incorrect last duration");
 
     //Gotchis can only channel every 24 hrs
@@ -57,7 +57,7 @@ contract TestAlchemicaFacet is Modifiers {
 
     //How often Altars can channel depends on their level
     require(block.timestamp >= s.parcelChannelings[_realmId] + s.channelingLimits[altarLevel], "AlchemicaFacet: Parcel can't channel yet");
-
+   
     (uint256 rate, uint256 radius) = InstallationDiamondInterface(s.installationsDiamond).spilloverRateAndRadiusOfId(s.parcels[_realmId].altarId);
 
     require(rate > 0, "InstallationFacet: Spillover Rate cannot be 0");
@@ -70,21 +70,10 @@ contract TestAlchemicaFacet is Modifiers {
       channelAmounts[i] = (channelAmounts[i] * kinshipModifier) / 100;
     }
 
+    bytes32 roleId = keccak256("AlchemicaChanneling()");
+
     for (uint256 i; i < channelAmounts.length; i++) {
-      IERC20Mintable alchemica = IERC20Mintable(s.alchemicaAddresses[i]);
-
-      //Mint new tokens if the Great Portal Balance is less than capacity
-
-      if (alchemica.balanceOf(address(this)) < s.greatPortalCapacity[i]) {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
-
-        alchemica.mint(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
-        alchemica.mint(address(this), amounts.spill);
-      } else {
-        TransferAmounts memory amounts = calculateTransferAmounts(channelAmounts[i], rate);
-
-        alchemica.transfer(LibAlchemica.alchemicaRecipient(_gotchiId), amounts.owner);
-      }
+     LibAlchemica._handleTokenChanneling(_realmId, roleId, channelAmounts[i], i);
     }
 
     //update latest channeling
@@ -108,11 +97,5 @@ contract TestAlchemicaFacet is Modifiers {
       }
       return 0;
     }
-  }
-
-  function calculateTransferAmounts(uint256 _amount, uint256 _spilloverRate) internal pure returns (TransferAmounts memory) {
-    uint256 owner = (_amount * (bp - (_spilloverRate * 10 ** 16))) / bp;
-    uint256 spill = (_amount * (_spilloverRate * 10 ** 16)) / bp;
-    return TransferAmounts(owner, spill);
   }
 }
